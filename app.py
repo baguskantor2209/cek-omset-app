@@ -16,7 +16,7 @@ from reportlab.platypus import (
 import streamlit as st
 
 st.set_page_config(
-    page_title="Dashboard Cek Omset Toko", layout="wide", page_icon="📊"
+    page_title="Bagus SDA AB4", layout="wide", page_icon="📊"
 )
 
 # Custom CSS: Sembunyikan Watermark / Footer / Header / Badge Streamlit Cloud di HP & Desktop
@@ -136,7 +136,7 @@ div.stDownloadButton > button p {
     unsafe_allow_html=True,
 )
 
-st.title("📊 Dashboard Cek Omset & KP Toko")
+st.title("📊 Dashboard Cek Omset Toko")
 
 
 # Helper pembaca CSV pintar (tahan berbagai delimiter & encoding)
@@ -256,7 +256,7 @@ def generate_pdf_landscape(row, bln_list):
     )
 
     elements.append(
-        Paragraph("<b>DASHBOARD LAPORAN OMSET & KP TOKO</b>", title_style)
+        Paragraph("<b>DASHBOARD LAPORAN OMSET KP TOKO</b>", title_style)
     )
 
     depo_str = str(row.get("depo", "-"))
