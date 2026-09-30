@@ -6,35 +6,40 @@ st.set_page_config(
     page_title="Dashboard Cek Omset Toko", layout="wide", page_icon="📊"
 )
 
-# Style CSS dimasukkan secara bersih tanpa indentasi ganda
+# Custom CSS Responsif HP + Desktop
 st.markdown(
     """<style>
 .stApp { background-color: #f8f9fa; color: #111827; }
+
+/* Metric Cards */
 .metric-card {
     background-color: #ffffff;
     border-radius: 12px;
-    padding: 18px 22px;
+    padding: 16px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     border-left: 5px solid #2563eb;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
-.metric-title { color: #4b5563; font-size: 0.82rem; font-weight: 700; text-transform: uppercase; }
-.metric-value { color: #1e3a8a; font-size: 1.8rem; font-weight: 800; margin: 4px 0; }
+.metric-title { color: #4b5563; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; }
+.metric-value { color: #1e3a8a; font-size: 1.6rem; font-weight: 800; margin: 4px 0; }
 .metric-subtitle { font-size: 0.85rem; font-weight: 600; }
 
+/* Table Container & Responsiveness */
 .omset-table-container {
     background: #ffffff;
-    padding: 24px;
-    border-radius: 14px;
+    padding: 16px;
+    border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.05);
     margin-top: 15px;
-    color: #111827;
+    overflow-x: auto; /* Mencegah tabel terpotong di HP */
+    -webkit-overflow-scrolling: touch;
 }
 .report-table {
     width: 100%;
+    min-width: 750px; /* Lebar minimum agar pas diswiper di HP */
     border-collapse: collapse;
     font-family: 'Segoe UI', Arial, sans-serif;
-    font-size: 13px;
+    font-size: 12px;
     color: #111827;
 }
 .report-table th {
@@ -44,6 +49,7 @@ st.markdown(
     text-align: center;
     padding: 8px 4px;
     border: 1px solid #bce8f1;
+    white-space: nowrap;
 }
 .report-table th.blue-header { background-color: #002060; color: #ffffff; }
 .report-table td {
@@ -52,16 +58,26 @@ st.markdown(
     text-align: right;
     color: #111827;
     background-color: #ffffff;
+    white-space: nowrap;
 }
 .report-table td.center { text-align: center; }
 .report-table td.left { text-align: left; font-weight: 600; }
 
+/* Dynamic Row Colors */
 .row-category { background-color: #002060 !important; color: #ffffff !important; font-weight: bold; }
 .row-category td { background-color: #002060 !important; color: #ffffff !important; border-color: #001040 !important; }
 .row-total { background-color: #d92525 !important; color: #ffffff !important; font-weight: bold; }
 .row-total td { background-color: #d92525 !important; color: #ffffff !important; border-color: #b01010 !important; }
 .row-ab23 { background-color: #800000 !important; color: #ffffff !important; font-weight: bold; }
 .row-ab23 td { background-color: #800000 !important; color: #ffffff !important; border-color: #500000 !important; }
+
+/* Media Query Khusus Layar HP */
+@media (max-width: 768px) {
+    .metric-value { font-size: 1.3rem; }
+    .omset-table-container { padding: 10px; }
+    .report-table { font-size: 11px; }
+    .report-table th, .report-table td { padding: 5px 4px; }
+}
 </style>""",
     unsafe_allow_html=True,
 )
@@ -117,34 +133,20 @@ try:
     with st.spinner("⏳ Memuat data..."):
         df = load_data_from_github()
 
-    col_search1, col_search2 = st.columns([2, 1])
-    toko_list = (
+    # PILIH / CARI TOKO (Pencarian Tunggal Berbasis Autocomplete)
+    toko_options = (
         df["kdCust"].astype(str) + " - " + df["cust"].astype(str)
     ).unique()
 
-    with col_search1:
-        selected_toko = st.selectbox(
-            "PILIH / CARI CUSTOMER",
-            options=["-- Pilih Toko --"] + list(toko_list),
-        )
-    with col_search2:
-        quick_search = st.text_input(
-            "CARI NAMA TOKO QUICK FILTER",
-            placeholder="Ketik Kode/Nama Toko...",
-        )
+    selected_toko = st.selectbox(
+        "🔍 CARI NAMA TOKO / KODE CUSTOMER:",
+        options=list(toko_options),
+        index=0,
+        help="Ketik kode customer atau nama toko untuk memfilter secara langsung.",
+    )
 
-    selected_code = None
-    if selected_toko != "-- Pilih Toko --":
+    if selected_toko:
         selected_code = selected_toko.split(" - ")[0]
-    elif quick_search:
-        matched = df[
-            df["kdCust"].astype(str).str.contains(quick_search, case=False)
-            | df["cust"].astype(str).str.contains(quick_search, case=False)
-        ]
-        if not matched.empty:
-            selected_code = matched.iloc[0]["kdCust"]
-
-    if selected_code:
         row = df[df["kdCust"].astype(str) == str(selected_code)].iloc[0]
 
         omset_sep26 = row.get("SEP26_AB4", 0)
@@ -158,11 +160,12 @@ try:
         status_arrow = "▲" if diff_omset >= 0 else "▼"
         status_color = "#10b981" if diff_omset >= 0 else "#ef4444"
 
-        c1, c2, c3 = st.columns(3)
+        # Tiga Kartu Ringkasan Atas
+        c1, c2, c3 = st.columns([1, 1, 1])
         with c1:
             st.markdown(
                 f"""<div class="metric-card" style="border-left-color: #2563eb;">
-<div class="metric-title">REAL OMSET BULAN BERJALAN DIVISI AB4</div>
+<div class="metric-title">REAL OMSET SEP 26 DIVISI AB4</div>
 <div class="metric-value">Rp {omset_sep26:,.1f} Jt</div>
 <div class="metric-subtitle" style="color: {status_color};">
 {status_arrow} {abs(pct_omset):,.1f}% vs RT2 25 ({diff_omset:+,.1f} Jt)
@@ -183,7 +186,7 @@ try:
             st.markdown(
                 """<div class="metric-card" style="border-left-color: #06b6d4;">
 <div class="metric-title">KATEGORI KONTRIBUTOR TERTINGGI</div>
-<div class="metric-value" style="font-size: 1.4rem;">ENERGY DRINK VITAMIN</div>
+<div class="metric-value" style="font-size: 1.3rem;">ENERGY DRINK VITAMIN</div>
 <div class="metric-subtitle" style="color: #06b6d4;">Volume Penjualan Terbesar</div>
 </div>""",
                 unsafe_allow_html=True,
@@ -217,18 +220,18 @@ try:
             return tds
 
         table_html = f"""<div class="omset-table-container">
-<div style="font-size: 15px; font-weight: bold; margin-bottom: 12px;">
+<div style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">
 Kode Cust : <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 4px;">{row['kdCust']}</span><br>
 Nama Toko : <b>{row['cust']}</b>
 </div>
 <table class="report-table">
 <thead>
 <tr>
-<th class="blue-header" style="width: 60px;">RT2 25</th>
-<th class="blue-header" style="width: 60px;">SM2 25</th>
-<th style="width: 30px;">No</th>
+<th class="blue-header" style="width: 55px;">RT2 25</th>
+<th class="blue-header" style="width: 55px;">SM2 25</th>
+<th style="width: 25px;">No</th>
 <th style="text-align: left;">KP</th>
-<th style="width: 50px;">Satuan</th>
+<th style="width: 45px;">Satuan</th>
 <th>JAN 26</th><th>FEB 26</th><th>MAR 26</th><th>APR 26</th>
 <th>MEI 26</th><th>JUN 26</th><th>JUL 26</th><th>AGT 26</th><th>SEP 26</th>
 </tr>
@@ -240,28 +243,38 @@ Nama Toko : <b>{row['cust']}</b>
 <tr><td class="center">{row.get('RT225_RBL',0):,.0f}</td><td class="center">{row.get('SM225_RBL',0):,.0f}</td><td class="center">4</td><td class="left">RBLGOLD</td><td class="center">Krt</td>{fmt_v('RBL')}</tr>
 <tr><td class="center">{row.get('RT225_UCW',0):,.0f}</td><td class="center">{row.get('SM225_UCW',0):,.0f}</td><td class="center">5</td><td class="left">UCW</td><td class="center">Krt</td>{fmt_v('UCW')}</tr>
 <tr><td class="center">{row.get('RT225_ISO',0):,.0f}</td><td class="center">{row.get('SM225_ISO',0):,.0f}</td><td class="center">6</td><td class="left">ISO</td><td class="center">Krt</td>{fmt_v('ISO')}</tr>
+
+<!-- SUB-TOTAL ENERGY DRINK -->
 <tr class="row-category">
 <td class="center">{row.get('RT225_EDV',0):,.1f}</td><td class="center">{row.get('SM225_EDV',0):,.1f}</td>
 <td colspan="2" class="left" style="padding-left:10px;">ENERGY DRINK VITAMIN</td><td class="center">Jt Rp</td>
 {fmt_raw('EDV')}
 </tr>
+
+<!-- HOME CARE: CZ Lsn, CZ Krt, R3, R06, ALK, ALK REG, ALK NON REG, MAA -->
 <tr><td class="center">{row.get('RT225_CZLSN',0):,.0f}</td><td class="center">{row.get('SM225_CZLSN',0):,.0f}</td><td class="center">7</td><td class="left">CZ</td><td class="center">Lsn</td>{fmt_v('CZLSN')}</tr>
 <tr><td class="center">{row.get('RT225_CZKRT',0):,.0f}</td><td class="center">{row.get('SM225_CZKRT',0):,.0f}</td><td class="center"></td><td class="left">CZ</td><td class="center">Krt</td>{fmt_v('CZKRT')}</tr>
+<tr><td class="center">{row.get('RT225_R3',0):,.0f}</td><td class="center">{row.get('SM225_R3',0):,.0f}</td><td class="center"></td><td class="left">R3</td><td class="center">Krt</td>{fmt_v('R3')}</tr>
 <tr><td class="center">{row.get('RT225_R06EXC',0):,.0f}</td><td class="center">{row.get('SM225_R06EXC',0):,.0f}</td><td class="center"></td><td class="left">R06</td><td class="center">Krt</td>{fmt_v('R06EXC')}</tr>
-<tr><td class="center">{row.get('RT225_R3',0):,.0f}</td><td class="center">{row.get('SM225_R3',0):,.0f}</td><td class="center">8</td><td class="left">ALK</td><td class="center">Krt</td>{fmt_v('R3')}</tr>
+<tr><td class="center">{row.get('RT225_ALK',0):,.0f}</td><td class="center">{row.get('SM225_ALK',0):,.0f}</td><td class="center">8</td><td class="left">ALK</td><td class="center">Krt</td>{fmt_v('ALK')}</tr>
 <tr><td class="center">{row.get('RT225_ALKREG',0):,.0f}</td><td class="center">{row.get('SM225_ALKREG',0):,.0f}</td><td class="center"></td><td class="left">ALK REG</td><td class="center">Krt</td>{fmt_v('ALKREG')}</tr>
 <tr><td class="center">{row.get('RT225_ALKNONREG',0):,.0f}</td><td class="center">{row.get('SM225_ALKNONREG',0):,.0f}</td><td class="center"></td><td class="left">ALK NON REG</td><td class="center">Krt</td>{fmt_v('ALKNONREG')}</tr>
 <tr><td class="center">{row.get('RT225_MAA',0):,.0f}</td><td class="center">{row.get('SM225_MAA',0):,.0f}</td><td class="center">9</td><td class="left">MAA</td><td class="center">Krt</td>{fmt_v('MAA')}</tr>
+
+<!-- SUB-TOTAL HOME CARE -->
 <tr class="row-category">
 <td class="center">{row.get('RT225_HC',0):,.1f}</td><td class="center">{row.get('SM225_HC',0):,.1f}</td>
 <td colspan="2" class="left" style="padding-left:10px;">HOME CARE</td><td class="center">Jt Rp</td>
 {fmt_raw('HC')}
 </tr>
+
+<!-- TOTAL DIVISI AB4 -->
 <tr class="row-total">
 <td class="center">{row.get('RT225_AB4',0):,.1f}</td><td class="center">{row.get('SM225_AB4',0):,.1f}</td>
 <td colspan="2" class="left" style="padding-left:10px;">DIVISI AB4</td><td class="center">Jt Rp</td>
 {fmt_raw('AB4')}
 </tr>
+
 <tr class="row-ab23">
 <td class="center">-</td><td class="center">-</td>
 <td colspan="2" class="left" style="padding-left:10px;">DIVISI AB2</td><td class="center">Jt Rp</td>
@@ -276,14 +289,10 @@ Nama Toko : <b>{row['cust']}</b>
 </table>
 </div>"""
 
-        # Menggunakan st.components.v1.html / st.html agar 100% aman dirender sebagai visual tabel
         try:
             st.html(table_html)
         except AttributeError:
             st.markdown(table_html, unsafe_allow_html=True)
-
-    else:
-        st.info("💡 Silakan pilih toko pada pencarian di atas.")
 
 except Exception as e:
     st.error(f"❌ Error: {e}")
