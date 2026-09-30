@@ -8,6 +8,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (
     HRFlowable,
+    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Table,
@@ -19,15 +20,13 @@ st.set_page_config(
     page_title="Bagus SDA AB4", layout="wide", page_icon="📊"
 )
 
-# Custom CSS: Sembunyikan Watermark / Footer / Header / Badge Streamlit Cloud di HP & Desktop
+# Custom CSS: Sembunyikan Watermark / Header Streamlit Cloud
 st.markdown(
     """<style>
-/* 1. Sembunyikan Header Atas & Menus */
 header { visibility: hidden !important; height: 0px !important; display: none !important; }
 #MainMenu { visibility: hidden !important; display: none !important; }
 .stAppToolbar { display: none !important; visibility: hidden !important; }
 
-/* 2. Sembunyikan Footer, Watermark "Hosted with Streamlit" & "Created by" di HP & PC */
 footer { visibility: hidden !important; height: 0px !important; display: none !important; }
 .stDeployButton { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
@@ -39,10 +38,9 @@ div[class*="styles_viewerBadge"] { display: none !important; visibility: hidden 
 div[class*="Profile"] { display: none !important; }
 iframe[title="streamlit_app"] { bottom: 0 !important; }
 
-/* 3. Style Tampilan Dashboard */
 .stApp { background-color: #f8f9fa; color: #111827; }
 
-/* Custom Styling Tombol Download PDF (Biru Terang & Teks Putih Tebal) */
+/* Custom Styling Tombol Download PDF */
 div.stDownloadButton > button {
     background-color: #2563eb !important;
     color: #ffffff !important;
@@ -74,7 +72,7 @@ div.stDownloadButton > button p {
     margin-bottom: 12px;
 }
 .metric-title { color: #4b5563; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; }
-.metric-value { color: #1e3a8a; font-size: 1.6rem; font-weight: 800; margin: 4px 0; }
+.metric-value { color: #1e3a8a; font-size: 1.5rem; font-weight: 800; margin: 4px 0; }
 .metric-subtitle { font-size: 0.85rem; font-weight: 600; }
 
 /* Table Container & Responsiveness */
@@ -84,6 +82,7 @@ div.stDownloadButton > button p {
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.05);
     margin-top: 15px;
+    margin-bottom: 25px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }
@@ -127,7 +126,7 @@ div.stDownloadButton > button p {
 
 /* Media Query Khusus Layar HP */
 @media (max-width: 768px) {
-    .metric-value { font-size: 1.3rem; }
+    .metric-value { font-size: 1.2rem; }
     .omset-table-container { padding: 10px; }
     .report-table { font-size: 11px; }
     .report-table th, .report-table td { padding: 5px 4px; }
@@ -136,10 +135,10 @@ div.stDownloadButton > button p {
     unsafe_allow_html=True,
 )
 
-st.title("📊 Dashboard Cek Omset Toko")
+st.title("📊 Dashboard Laporan Omset Toko")
 
 
-# Helper pembaca CSV pintar (tahan berbagai delimiter & encoding)
+# Helper pembaca CSV pintar
 def read_file_fast(file_path):
     if file_path.endswith(".csv.gz") or file_path.endswith(".csv"):
         for enc in ["utf-8", "latin-1", "cp1252"]:
@@ -206,7 +205,7 @@ def load_data_from_github():
     return pd.merge(df_div, df_kp[cols_to_use], on="kdCust", how="inner")
 
 
-# Helper Format Angka: Jika 0 / 0.0 diubah jadi '-'
+# Helper Format Angka
 def f_num(val):
     try:
         val = float(val)
@@ -223,8 +222,27 @@ def f_dec(val):
         return "-"
 
 
-# Fungsi Generate PDF Landscape & Center
-def generate_pdf_landscape(row, bln_list):
+# Helper Format Bulan Cantik (misal: "SEP26" -> "SEP 2026" / "September 2026")
+def format_month_label(bln_code):
+    months_map = {
+        "JAN": "Januari",
+        "FEB": "Februari",
+        "MAR": "Maret",
+        "APR": "April",
+        "MEI": "Mei",
+        "JUN": "Juni",
+        "JUL": "Juli",
+        "AGT": "Agustus",
+        "SEP": "September",
+    }
+    code = str(bln_code).upper()
+    prefix = code[:3]
+    m_name = months_map.get(prefix, prefix)
+    return f"{m_name} 2026" if "26" in code else f"{m_name}"
+
+
+# Fungsi Generate PDF Multi-Toko (1 Toko Per Lembar)
+def generate_pdf_multi_toko(rows_list, bln_list):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -241,10 +259,10 @@ def generate_pdf_landscape(row, bln_list):
     title_style = ParagraphStyle(
         "TitleStyle",
         parent=styles["Heading1"],
-        fontSize=16,
+        fontSize=15,
         alignment=1,  # Center
         textColor=colors.HexColor("#002060"),
-        spaceAfter=10,
+        spaceAfter=8,
     )
 
     info_style = ParagraphStyle(
@@ -252,26 +270,7 @@ def generate_pdf_landscape(row, bln_list):
         parent=styles["Normal"],
         fontSize=10,
         alignment=1,  # Center
-        spaceAfter=12,
-    )
-
-    elements.append(
-        Paragraph("<b>DASHBOARD LAPORAN OMSET KP TOKO</b>", title_style)
-    )
-
-    depo_str = str(row.get("depo", "-"))
-    cust_code = str(row.get("kdCust", "-"))
-    cust_name = str(row.get("cust", "-"))
-
-    info_text = f"<b>Depo:</b> {depo_str} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Kode Cust:</b> {cust_code} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Nama Toko:</b> {cust_name}"
-    elements.append(Paragraph(info_text, info_style))
-    elements.append(
-        HRFlowable(
-            width="100%",
-            thickness=1,
-            color=colors.HexColor("#002060"),
-            spaceAfter=15,
-        )
+        spaceAfter=10,
     )
 
     headers = [
@@ -291,261 +290,285 @@ def generate_pdf_landscape(row, bln_list):
         "SEP 26",
     ]
 
-    table_data = [headers]
+    for idx, row in enumerate(rows_list):
+        elements.append(
+            Paragraph("<b>DASHBOARD LAPORAN OMSET TOKO</b>", title_style)
+        )
 
-    def get_v_list(suffix, is_num=True):
-        return [
-            f_num(row.get(f"{b}_{suffix}", 0))
-            if is_num
-            else f_dec(row.get(f"{b}_{suffix}", 0))
-            for b in bln_list
+        depo_str = str(row.get("depo", "-"))
+        cust_code = str(row.get("kdCust", "-"))
+        cust_name = str(row.get("cust", "-"))
+
+        info_text = f"<b>Depo:</b> {depo_str} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Kode Cust:</b> {cust_code} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Nama Toko:</b> {cust_name}"
+        elements.append(Paragraph(info_text, info_style))
+        elements.append(
+            HRFlowable(
+                width="100%",
+                thickness=1,
+                color=colors.HexColor("#002060"),
+                spaceAfter=12,
+            )
+        )
+
+        table_data = [headers]
+
+        def get_v_list(suffix, is_num=True):
+            return [
+                f_num(row.get(f"{b}_{suffix}", 0))
+                if is_num
+                else f_dec(row.get(f"{b}_{suffix}", 0))
+                for b in bln_list
+            ]
+
+        rows_config = [
+            (
+                f_num(row.get("RT225_TOR", 0)),
+                f_num(row.get("SM225_TOR", 0)),
+                "1",
+                "TOR",
+                "Krt",
+                get_v_list("TOR", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_UCV", 0)),
+                f_num(row.get("SM225_UCV", 0)),
+                "2",
+                "UCV",
+                "Krt",
+                get_v_list("UCV", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_KTD", 0)),
+                f_num(row.get("SM225_KTD", 0)),
+                "3",
+                "KTD",
+                "Krt",
+                get_v_list("KTD", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_RBL", 0)),
+                f_num(row.get("SM225_RBL", 0)),
+                "4",
+                "RBLGOLD",
+                "Krt",
+                get_v_list("RBL", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_UCW", 0)),
+                f_num(row.get("SM225_UCW", 0)),
+                "5",
+                "UCW",
+                "Krt",
+                get_v_list("UCW", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_ISO", 0)),
+                f_num(row.get("SM225_ISO", 0)),
+                "6",
+                "ISO",
+                "Krt",
+                get_v_list("ISO", True),
+                "item",
+            ),
+            (
+                f_dec(row.get("RT225_EDV", 0)),
+                f_dec(row.get("SM225_EDV", 0)),
+                "",
+                "ENERGY DRINK VITAMIN",
+                "Jt Rp",
+                get_v_list("EDV", False),
+                "cat",
+            ),
+            (
+                f_num(row.get("RT225_CZLSN", 0)),
+                f_num(row.get("SM225_CZLSN", 0)),
+                "7",
+                "CZ",
+                "Lsn",
+                get_v_list("CZLSN", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_CZKRT", 0)),
+                f_num(row.get("SM225_CZKRT", 0)),
+                "",
+                "CZ",
+                "Krt",
+                get_v_list("CZKRT", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_R3", 0)),
+                f_num(row.get("SM225_R3", 0)),
+                "",
+                "R3",
+                "Krt",
+                get_v_list("R3", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_R06EXC", 0)),
+                f_num(row.get("SM225_R06EXC", 0)),
+                "",
+                "R06",
+                "Krt",
+                get_v_list("R06EXC", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_ALK", 0)),
+                f_num(row.get("SM225_ALK", 0)),
+                "8",
+                "ALK",
+                "Krt",
+                get_v_list("ALK", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_ALKREG", 0)),
+                f_num(row.get("SM225_ALKREG", 0)),
+                "",
+                "ALK REG",
+                "Krt",
+                get_v_list("ALKREG", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_ALKNONREG", 0)),
+                f_num(row.get("SM225_ALKNONREG", 0)),
+                "",
+                "ALK NON REG",
+                "Krt",
+                get_v_list("ALKNONREG", True),
+                "item",
+            ),
+            (
+                f_num(row.get("RT225_MAA", 0)),
+                f_num(row.get("SM225_MAA", 0)),
+                "9",
+                "MAA",
+                "Krt",
+                get_v_list("MAA", True),
+                "item",
+            ),
+            (
+                f_dec(row.get("RT225_HC", 0)),
+                f_dec(row.get("SM225_HC", 0)),
+                "",
+                "HOME CARE",
+                "Jt Rp",
+                get_v_list("HC", False),
+                "cat",
+            ),
+            (
+                f_dec(row.get("RT225_AB4", 0)),
+                f_dec(row.get("SM225_AB4", 0)),
+                "",
+                "DIVISI AB4",
+                "Jt Rp",
+                get_v_list("AB4", False),
+                "total",
+            ),
+            (
+                f_dec(row.get("RT225_AB2", 0)),
+                f_dec(row.get("SM225_AB2", 0)),
+                "",
+                "DIVISI AB2",
+                "Jt Rp",
+                get_v_list("AB2", False),
+                "ab23",
+            ),
+            (
+                f_dec(row.get("RT225_AB3", 0)),
+                f_dec(row.get("SM225_AB3", 0)),
+                "",
+                "DIVISI AB3",
+                "Jt Rp",
+                get_v_list("AB3", False),
+                "ab23",
+            ),
         ]
 
-    rows_config = [
-        (
-            f_num(row.get("RT225_TOR", 0)),
-            f_num(row.get("SM225_TOR", 0)),
-            "1",
-            "TOR",
-            "Krt",
-            get_v_list("TOR", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_UCV", 0)),
-            f_num(row.get("SM225_UCV", 0)),
-            "2",
-            "UCV",
-            "Krt",
-            get_v_list("UCV", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_KTD", 0)),
-            f_num(row.get("SM225_KTD", 0)),
-            "3",
-            "KTD",
-            "Krt",
-            get_v_list("KTD", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_RBL", 0)),
-            f_num(row.get("SM225_RBL", 0)),
-            "4",
-            "RBLGOLD",
-            "Krt",
-            get_v_list("RBL", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_UCW", 0)),
-            f_num(row.get("SM225_UCW", 0)),
-            "5",
-            "UCW",
-            "Krt",
-            get_v_list("UCW", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_ISO", 0)),
-            f_num(row.get("SM225_ISO", 0)),
-            "6",
-            "ISO",
-            "Krt",
-            get_v_list("ISO", True),
-            "item",
-        ),
-        (
-            f_dec(row.get("RT225_EDV", 0)),
-            f_dec(row.get("SM225_EDV", 0)),
-            "",
-            "ENERGY DRINK VITAMIN",
-            "Jt Rp",
-            get_v_list("EDV", False),
-            "cat",
-        ),
-        (
-            f_num(row.get("RT225_CZLSN", 0)),
-            f_num(row.get("SM225_CZLSN", 0)),
-            "7",
-            "CZ",
-            "Lsn",
-            get_v_list("CZLSN", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_CZKRT", 0)),
-            f_num(row.get("SM225_CZKRT", 0)),
-            "",
-            "CZ",
-            "Krt",
-            get_v_list("CZKRT", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_R3", 0)),
-            f_num(row.get("SM225_R3", 0)),
-            "",
-            "R3",
-            "Krt",
-            get_v_list("R3", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_R06EXC", 0)),
-            f_num(row.get("SM225_R06EXC", 0)),
-            "",
-            "R06",
-            "Krt",
-            get_v_list("R06EXC", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_ALK", 0)),
-            f_num(row.get("SM225_ALK", 0)),
-            "8",
-            "ALK",
-            "Krt",
-            get_v_list("ALK", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_ALKREG", 0)),
-            f_num(row.get("SM225_ALKREG", 0)),
-            "",
-            "ALK REG",
-            "Krt",
-            get_v_list("ALKREG", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_ALKNONREG", 0)),
-            f_num(row.get("SM225_ALKNONREG", 0)),
-            "",
-            "ALK NON REG",
-            "Krt",
-            get_v_list("ALKNONREG", True),
-            "item",
-        ),
-        (
-            f_num(row.get("RT225_MAA", 0)),
-            f_num(row.get("SM225_MAA", 0)),
-            "9",
-            "MAA",
-            "Krt",
-            get_v_list("MAA", True),
-            "item",
-        ),
-        (
-            f_dec(row.get("RT225_HC", 0)),
-            f_dec(row.get("SM225_HC", 0)),
-            "",
-            "HOME CARE",
-            "Jt Rp",
-            get_v_list("HC", False),
-            "cat",
-        ),
-        (
-            f_dec(row.get("RT225_AB4", 0)),
-            f_dec(row.get("SM225_AB4", 0)),
-            "",
-            "DIVISI AB4",
-            "Jt Rp",
-            get_v_list("AB4", False),
-            "total",
-        ),
-        (
-            f_dec(row.get("RT225_AB2", 0)),
-            f_dec(row.get("SM225_AB2", 0)),
-            "",
-            "DIVISI AB2",
-            "Jt Rp",
-            get_v_list("AB2", False),
-            "ab23",
-        ),
-        (
-            f_dec(row.get("RT225_AB3", 0)),
-            f_dec(row.get("SM225_AB3", 0)),
-            "",
-            "DIVISI AB3",
-            "Jt Rp",
-            get_v_list("AB3", False),
-            "ab23",
-        ),
-    ]
+        t_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#00c0f0")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+        ]
 
-    t_style = [
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#00c0f0")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
-    ]
-
-    r_idx = 1
-    for rt2, sm2, no, kp, sat, vals, r_type in rows_config:
-        table_data.append([rt2, sm2, no, kp, sat] + vals)
-        if r_type == "cat":
-            t_style.append(
-                (
-                    "BACKGROUND",
-                    (0, r_idx),
-                    (-1, r_idx),
-                    colors.HexColor("#002060"),
+        r_idx = 1
+        for rt2, sm2, no, kp, sat, vals, r_type in rows_config:
+            table_data.append([rt2, sm2, no, kp, sat] + vals)
+            if r_type == "cat":
+                t_style.append(
+                    (
+                        "BACKGROUND",
+                        (0, r_idx),
+                        (-1, r_idx),
+                        colors.HexColor("#002060"),
+                    )
                 )
-            )
-            t_style.append(
-                ("TEXTCOLOR", (0, r_idx), (-1, r_idx), colors.white)
-            )
-            t_style.append(
-                ("FONTNAME", (0, r_idx), (-1, r_idx), "Helvetica-Bold")
-            )
-            t_style.append(("SPAN", (2, r_idx), (3, r_idx)))
-        elif r_type == "total":
-            t_style.append(
-                (
-                    "BACKGROUND",
-                    (0, r_idx),
-                    (-1, r_idx),
-                    colors.HexColor("#d92525"),
+                t_style.append(
+                    ("TEXTCOLOR", (0, r_idx), (-1, r_idx), colors.white)
                 )
-            )
-            t_style.append(
-                ("TEXTCOLOR", (0, r_idx), (-1, r_idx), colors.white)
-            )
-            t_style.append(
-                ("FONTNAME", (0, r_idx), (-1, r_idx), "Helvetica-Bold")
-            )
-            t_style.append(("SPAN", (2, r_idx), (3, r_idx)))
-        elif r_type == "ab23":
-            t_style.append(
-                (
-                    "BACKGROUND",
-                    (0, r_idx),
-                    (-1, r_idx),
-                    colors.HexColor("#800000"),
+                t_style.append(
+                    ("FONTNAME", (0, r_idx), (-1, r_idx), "Helvetica-Bold")
                 )
-            )
-            t_style.append(
-                ("TEXTCOLOR", (0, r_idx), (-1, r_idx), colors.white)
-            )
-            t_style.append(
-                ("FONTNAME", (0, r_idx), (-1, r_idx), "Helvetica-Bold")
-            )
-            t_style.append(("SPAN", (2, r_idx), (3, r_idx)))
+                t_style.append(("SPAN", (2, r_idx), (3, r_idx)))
+            elif r_type == "total":
+                t_style.append(
+                    (
+                        "BACKGROUND",
+                        (0, r_idx),
+                        (-1, r_idx),
+                        colors.HexColor("#d92525"),
+                    )
+                )
+                t_style.append(
+                    ("TEXTCOLOR", (0, r_idx), (-1, r_idx), colors.white)
+                )
+                t_style.append(
+                    ("FONTNAME", (0, r_idx), (-1, r_idx), "Helvetica-Bold")
+                )
+                t_style.append(("SPAN", (2, r_idx), (3, r_idx)))
+            elif r_type == "ab23":
+                t_style.append(
+                    (
+                        "BACKGROUND",
+                        (0, r_idx),
+                        (-1, r_idx),
+                        colors.HexColor("#800000"),
+                    )
+                )
+                t_style.append(
+                    ("TEXTCOLOR", (0, r_idx), (-1, r_idx), colors.white)
+                )
+                t_style.append(
+                    ("FONTNAME", (0, r_idx), (-1, r_idx), "Helvetica-Bold")
+                )
+                t_style.append(("SPAN", (2, r_idx), (3, r_idx)))
 
-        r_idx += 1
+            r_idx += 1
 
-    col_widths = [50, 50, 25, 110, 45] + [48] * 9
-    pdf_table = Table(table_data, colWidths=col_widths, hAlign="CENTER")
-    pdf_table.setStyle(TableStyle(t_style))
+        col_widths = [50, 50, 25, 110, 45] + [48] * 9
+        pdf_table = Table(table_data, colWidths=col_widths, hAlign="CENTER")
+        pdf_table.setStyle(TableStyle(t_style))
 
-    elements.append(pdf_table)
+        elements.append(pdf_table)
+
+        # Tambahkan PageBreak jika bukan toko terakhir
+        if idx < len(rows_list) - 1:
+            elements.append(PageBreak())
 
     doc.build(elements)
     buffer.seek(0)
@@ -560,139 +583,136 @@ try:
         df["kdCust"].astype(str) + " - " + df["cust"].astype(str)
     ).unique()
 
-    selected_toko = st.selectbox(
-        "🔍 CARI NAMA TOKO / KODE CUSTOMER:",
+    # PILIH MULTI TOKO (Maksimal 5 Toko)
+    selected_tokos = st.multiselect(
+        "🔍 CARI & PILIH TOKO (MAKSIMAL 5 TOKO):",
         options=list(toko_options),
-        index=None,
+        max_selections=5,
         placeholder="Ketik Kode / Nama Toko Disini...",
-        help="Ketik kode customer atau nama toko untuk memfilter secara langsung.",
+        help="Anda dapat memilih hingga 5 toko sekaligus.",
     )
 
-    if selected_toko:
-        selected_code = selected_toko.split(" - ")[0]
-        row = df[df["kdCust"].astype(str) == str(selected_code)].iloc[0]
+    bln_list = [
+        "JAN26",
+        "FEB26",
+        "MAR26",
+        "APR26",
+        "MEI26",
+        "JUN26",
+        "JUL26",
+        "AGT26",
+        "SEP26",
+    ]
 
-        omset_sep26 = row.get("SEP26_AB4", 0)
-        rt225_ab4 = row.get("RT225_AB4", 0)
-        diff_omset = omset_sep26 - rt225_ab4
-        pct_omset = (
-            (diff_omset / rt225_ab4 * 100)
-            if rt225_ab4 and rt225_ab4 > 0
-            else 0
-        )
-        status_arrow = "▲" if diff_omset >= 0 else "▼"
-        status_color = "#10b981" if diff_omset >= 0 else "#ef4444"
+    if selected_tokos:
+        selected_rows = []
 
-        # Hitung kontributor terbesar dinamis antar divisi
-        div_sums = {
-            "DIVISI AB4": sum(
-                [
-                    float(row.get(f"{b}_AB4", 0) or 0)
-                    for b in [
-                        "JAN26",
-                        "FEB26",
-                        "MAR26",
-                        "APR26",
-                        "MEI26",
-                        "JUN26",
-                        "JUL26",
-                        "AGT26",
-                        "SEP26",
-                    ]
-                ]
-            ),
-            "DIVISI AB2": sum(
-                [
-                    float(row.get(f"{b}_AB2", 0) or 0)
-                    for b in [
-                        "JAN26",
-                        "FEB26",
-                        "MAR26",
-                        "APR26",
-                        "MEI26",
-                        "JUN26",
-                        "JUL26",
-                        "AGT26",
-                        "SEP26",
-                    ]
-                ]
-            ),
-            "DIVISI AB3": sum(
-                [
-                    float(row.get(f"{b}_AB3", 0) or 0)
-                    for b in [
-                        "JAN26",
-                        "FEB26",
-                        "MAR26",
-                        "APR26",
-                        "MEI26",
-                        "JUN26",
-                        "JUL26",
-                        "AGT26",
-                        "SEP26",
-                    ]
-                ]
-            ),
-        }
-        top_div = max(div_sums, key=div_sums.get)
+        # Menampilkan setiap toko yang dipilih
+        for selected_toko in selected_tokos:
+            selected_code = selected_toko.split(" - ")[0]
+            row = df[df["kdCust"].astype(str) == str(selected_code)].iloc[0]
+            selected_rows.append(row)
 
-        # Metric Cards
-        c1, c2, c3 = st.columns([1, 1, 1])
-        with c1:
-            st.markdown(
-                f"""<div class="metric-card" style="border-left-color: #2563eb;">
+            omset_sep26 = row.get("SEP26_AB4", 0)
+            rt225_ab4 = row.get("RT225_AB4", 0)
+            diff_omset = omset_sep26 - rt225_ab4
+            pct_omset = (
+                (diff_omset / rt225_ab4 * 100)
+                if rt225_ab4 and rt225_ab4 > 0
+                else 0
+            )
+            status_arrow = "▲" if diff_omset >= 0 else "▼"
+            status_color = "#10b981" if diff_omset >= 0 else "#ef4444"
+
+            # 1. Hitung Kontributor Terbesar Dinamis Antar Divisi (Akumulasi Total Bulan)
+            div_sums = {
+                "DIVISI AB4": sum(
+                    [
+                        float(row.get(f"{b}_AB4", 0) or 0)
+                        for b in bln_list
+                    ]
+                ),
+                "DIVISI AB2": sum(
+                    [
+                        float(row.get(f"{b}_AB2", 0) or 0)
+                        for b in bln_list
+                    ]
+                ),
+                "DIVISI AB3": sum(
+                    [
+                        float(row.get(f"{b}_AB3", 0) or 0)
+                        for b in bln_list
+                    ]
+                ),
+            }
+            top_div = max(div_sums, key=div_sums.get)
+
+            # 2. Hitung Omset Tunggal Terbesar (Max Single Cell antar Divisi & Bulan)
+            max_val = -1.0
+            max_div_name = "DIVISI AB4"
+            max_month_code = "SEP26"
+
+            for div_code, div_label in [
+                ("AB4", "DIVISI AB4"),
+                ("AB2", "DIVISI AB2"),
+                ("AB3", "DIVISI AB3"),
+            ]:
+                for b in bln_list:
+                    val = float(row.get(f"{b}_{div_code}", 0) or 0)
+                    if val > max_val:
+                        max_val = val
+                        max_div_name = div_label
+                        max_month_code = b
+
+            max_month_str = format_month_label(max_month_code)
+
+            # Metric Cards per toko
+            c1, c2, c3 = st.columns([1, 1, 1])
+            with c1:
+                st.markdown(
+                    f"""<div class="metric-card" style="border-left-color: #2563eb;">
 <div class="metric-title">REAL OMSET SEP 26 DIVISI AB4</div>
 <div class="metric-value">Rp {omset_sep26:,.1f} Jt</div>
 <div class="metric-subtitle" style="color: {status_color};">
 {status_arrow} {abs(pct_omset):,.1f}% vs RT2 25 ({diff_omset:+,.1f} Jt)
 </div>
 </div>""",
-                unsafe_allow_html=True,
-            )
-        with c2:
-            st.markdown(
-                f"""<div class="metric-card" style="border-left-color: #9333ea;">
+                    unsafe_allow_html=True,
+                )
+            with c2:
+                st.markdown(
+                    f"""<div class="metric-card" style="border-left-color: #9333ea;">
 <div class="metric-title">KONTRIBUTOR OMSET TERBESAR DIVISI</div>
 <div class="metric-value">{top_div}</div>
 <div class="metric-subtitle" style="color: #9333ea;">Penyumbang Omset Utama</div>
 </div>""",
-                unsafe_allow_html=True,
-            )
-        with c3:
-            st.markdown(
-                """<div class="metric-card" style="border-left-color: #06b6d4;">
-<div class="metric-title">KATEGORI KONTRIBUTOR TERTINGGI</div>
-<div class="metric-value" style="font-size: 1.3rem;">ENERGY DRINK VITAMIN</div>
-<div class="metric-subtitle" style="color: #06b6d4;">Volume Penjualan Terbesar</div>
+                    unsafe_allow_html=True,
+                )
+            with c3:
+                st.markdown(
+                    f"""<div class="metric-card" style="border-left-color: #06b6d4;">
+<div class="metric-title">OMSET TERBESAR SATUAN</div>
+<div class="metric-value" style="font-size: 1.15rem; line-height: 1.3;">
+Omset Terbesar Jatuh Pada <b>{max_div_name}</b> Pada Bulan <b>{max_month_str}</b>
+</div>
+<div class="metric-subtitle" style="color: #06b6d4;">Dengan Jumlah Omset Rp {max_val:,.1f} Jt</div>
 </div>""",
-                unsafe_allow_html=True,
-            )
+                    unsafe_allow_html=True,
+                )
 
-        bln_list = [
-            "JAN26",
-            "FEB26",
-            "MAR26",
-            "APR26",
-            "MEI26",
-            "JUN26",
-            "JUL26",
-            "AGT26",
-            "SEP26",
-        ]
+            def fmt_v(suffix):
+                tds = ""
+                for b in bln_list:
+                    tds += f"<td>{f_num(row.get(f'{b}_{suffix}', 0))}</td>"
+                return tds
 
-        def fmt_v(suffix):
-            tds = ""
-            for b in bln_list:
-                tds += f"<td>{f_num(row.get(f'{b}_{suffix}', 0))}</td>"
-            return tds
+            def fmt_raw(suffix):
+                tds = ""
+                for b in bln_list:
+                    tds += f"<td>{f_dec(row.get(f'{b}_{suffix}', 0))}</td>"
+                return tds
 
-        def fmt_raw(suffix):
-            tds = ""
-            for b in bln_list:
-                tds += f"<td>{f_dec(row.get(f'{b}_{suffix}', 0))}</td>"
-            return tds
-
-        table_html = f"""<div class="omset-table-container">
+            table_html = f"""<div class="omset-table-container">
 <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; line-height: 1.6;">
 Depo : <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 4px;">{row.get('depo', '-')}</span><br>
 Kode Cust : <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 4px;">{row['kdCust']}</span><br>
@@ -764,20 +784,20 @@ Nama Toko : <b>{row['cust']}</b>
 </table>
 </div>"""
 
-        try:
-            st.html(table_html)
-        except AttributeError:
-            st.markdown(table_html, unsafe_allow_html=True)
+            try:
+                st.html(table_html)
+            except AttributeError:
+                st.markdown(table_html, unsafe_allow_html=True)
 
-        # Tombol Download PDF Landscape Center dengan Warna Biru Terang
-        pdf_bytes = generate_pdf_landscape(row, bln_list)
+        # Tombol Download PDF Gabungan Multi-Toko (1 Toko Per Lembar)
+        pdf_bytes = generate_pdf_multi_toko(selected_rows, bln_list)
         st.markdown("<br>", unsafe_allow_html=True)
         col_pdf1, col_pdf2, col_pdf3 = st.columns([1, 2, 1])
         with col_pdf2:
             st.download_button(
-                label="📄 Export / Download Laporan PDF (Landscape)",
+                label=f"📄 Export / Download Laporan PDF ({len(selected_tokos)} Toko)",
                 data=pdf_bytes,
-                file_name=f"Laporan_Omset_{selected_code}.pdf",
+                file_name=f"Laporan_Omset_MultiToko_{len(selected_tokos)}_Toko.pdf",
                 mime="application/pdf",
                 use_container_width=True,
             )
