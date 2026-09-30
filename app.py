@@ -86,14 +86,29 @@ st.markdown(
 st.title("📊 Dashboard Cek Omset & KP Toko")
 
 
-# Fungsi pembaca file kompresi cepat (.gz / .csv / .xlsx)
+# Helper pembaca CSV pintar
 def read_file_fast(file_path):
     if file_path.endswith(".csv.gz") or file_path.endswith(".csv"):
         for enc in ["utf-8", "latin-1", "cp1252"]:
-            try:
-                return pd.read_csv(file_path, encoding=enc, on_bad_lines="skip")
-            except Exception:
-                continue
+            for sep in [None, ",", ";", "\t"]:
+                try:
+                    if sep is None:
+                        return pd.read_csv(
+                            file_path,
+                            encoding=enc,
+                            engine="python",
+                            on_bad_lines="skip",
+                        )
+                    else:
+                        return pd.read_csv(
+                            file_path,
+                            encoding=enc,
+                            sep=sep,
+                            engine="python",
+                            on_bad_lines="skip",
+                        )
+                except Exception:
+                    continue
     return pd.read_excel(file_path, engine="openpyxl")
 
 
@@ -101,18 +116,21 @@ def read_file_fast(file_path):
 def load_data_from_github():
     file_div_path, file_kp_path = None, None
 
-    # Mengutamakan file kompresi .csv.gz
     div_candidates = [
         "DIV_BDB_TEST.csv.gz",
         "DIV BDB TEST.csv.gz",
         "DIV_BDB_TEST.csv",
+        "DIV BDB TEST.csv",
         "DIV_BDB_TEST.xlsx",
+        "DIV BDB TEST.xlsx",
     ]
     kp_candidates = [
         "KP_BDB_TEST.csv.gz",
         "KP BDB TEST.csv.gz",
         "KP_BDB_TEST.csv",
+        "KP BDB TEST.csv",
         "KP_BDB_TEST.xlsx",
+        "KP BDB TEST.xlsx",
     ]
 
     for f in div_candidates:
@@ -135,7 +153,7 @@ def load_data_from_github():
     return pd.merge(df_div, df_kp[cols_to_use], on="kdCust", how="inner")
 
 
-# Helper Format Angka
+# Helper Format Angka: Jika 0 / 0.0 diubah jadi '-'
 def f_num(val):
     try:
         val = float(val)
@@ -153,13 +171,15 @@ def f_dec(val):
 
 
 try:
-    with st.spinner("⚡ Memuat data super cepat..."):
+    with st.spinner("⚡ Memuat data..."):
         df = load_data_from_github()
 
+    # Opsi daftar toko
     toko_options = (
         df["kdCust"].astype(str) + " - " + df["cust"].astype(str)
     ).unique()
 
+    # Searchbox Default Kosong
     selected_toko = st.selectbox(
         "🔍 CARI NAMA TOKO / KODE CUSTOMER:",
         options=list(toko_options),
@@ -183,6 +203,7 @@ try:
         status_arrow = "▲" if diff_omset >= 0 else "▼"
         status_color = "#10b981" if diff_omset >= 0 else "#ef4444"
 
+        # Metric Cards
         c1, c2, c3 = st.columns([1, 1, 1])
         with c1:
             st.markdown(
@@ -295,15 +316,16 @@ Nama Toko : <b>{row['cust']}</b>
 {fmt_raw('AB4')}
 </tr>
 
+<!-- DIVISI AB2 & AB3 SEKARANG TERISI DARI DATABASE -->
 <tr class="row-ab23">
-<td class="center">-</td><td class="center">-</td>
+<td class="center">{f_dec(row.get('RT225_AB2',0))}</td><td class="center">{f_dec(row.get('SM225_AB2',0))}</td>
 <td colspan="2" class="left bold-col" style="padding-left:10px;">DIVISI AB2</td><td class="center">Jt Rp</td>
-{''.join(['<td>-</td>' for _ in bln_list])}
+{fmt_raw('AB2')}
 </tr>
 <tr class="row-ab23">
-<td class="center">-</td><td class="center">-</td>
+<td class="center">{f_dec(row.get('RT225_AB3',0))}</td><td class="center">{f_dec(row.get('SM225_AB3',0))}</td>
 <td colspan="2" class="left bold-col" style="padding-left:10px;">DIVISI AB3</td><td class="center">Jt Rp</td>
-{''.join(['<td>-</td>' for _ in bln_list])}
+{fmt_raw('AB3')}
 </tr>
 </tbody>
 </table>
