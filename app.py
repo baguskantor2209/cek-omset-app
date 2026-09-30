@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(
-    page_title="Dashboard Cek Omset Toko", layout="wide", page_icon="📊"
+    page_title="Bagus SDA AB4", layout="wide", page_icon="📊"
 )
 
 # Custom CSS Responsif HP + Desktop
@@ -237,7 +237,8 @@ try:
             return tds
 
         table_html = f"""<div class="omset-table-container">
-<div style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">
+<div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; line-height: 1.6;">
+Depo : <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 4px;">{row.get('depo', '-')}</span><br>
 Kode Cust : <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 4px;">{row['kdCust']}</span><br>
 Nama Toko : <b>{row['cust']}</b>
 </div>
