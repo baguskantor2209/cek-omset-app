@@ -6,23 +6,35 @@ import pandas as pd
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Table, TableStyle
+from reportlab.platypus import (
+    HRFlowable,
+    Paragraph,
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+)
 import streamlit as st
 
 st.set_page_config(
     page_title="Bagus SDA AB4", layout="wide", page_icon="📊"
 )
 
-# Custom CSS: Menyembunyikan Header GitHub, Footer Streamlit, dan Main Menu
+# Custom CSS: Menyembunyikan Header GitHub, Footer Streamlit, dan Badge HP
 st.markdown(
     """<style>
-/* Sembunyikan Header Atas (Logo GitHub & Main Menu) */
-header { visibility: hidden !important; }
+/* Sembunyikan Header Atas (Logo GitHub, Fork, & Main Menu) */
+header { visibility: hidden !important; height: 0px !important; }
 #MainMenu { visibility: hidden !important; }
+.stAppToolbar { display: none !important; }
 
-/* Sembunyikan Footer Bawah Streamlit */
-footer { visibility: hidden !important; }
+/* Sembunyikan Footer Bawah & Logo "Hosted with Streamlit" / Profile GitHub */
+footer { visibility: hidden !important; height: 0px !important; display: none !important; }
 .stDeployButton { display: none !important; }
+[data-testid="stDecoration"] { display: none !important; }
+[data-testid="stStatusWidget"] { visibility: hidden !important; }
+[data-testid="stViewerBadge"] { display: none !important; }
+.viewerBadge_container__13vls { display: none !important; }
+iframe[title="streamlit_app"] { bottom: 0 !important; }
 
 /* Style Tampilan Dashboard */
 .stApp { background-color: #f8f9fa; color: #111827; }
@@ -169,7 +181,7 @@ def load_data_from_github():
     return pd.merge(df_div, df_kp[cols_to_use], on="kdCust", how="inner")
 
 
-# Helper Format Angka: Jika 0 / 0.0 diubah jadi '-'
+# Helper Format Angka
 def f_num(val):
     try:
         val = float(val)
