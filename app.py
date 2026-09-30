@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import streamlit as st
 
@@ -5,10 +6,10 @@ st.set_page_config(
     page_title="Dashboard Cek Omset Toko", layout="wide", page_icon="📊"
 )
 
-# Custom CSS untuk mempercantik tampilan agar tidak kaku
+# Custom CSS untuk tampilan modern persis seperti gambar
 st.markdown(
     """
-<style真っ
+<style>
     .main { background-color: #f8f9fa; }
     .metric-card {
         background-color: #ffffff;
@@ -66,39 +67,70 @@ st.markdown(
 
 st.title("📊 Dashboard Cek Omset & KP Toko")
 
-# Sidebar Upload File Database
-st.sidebar.header("📁 Upload File Excel")
-file_div = st.sidebar.file_uploader(
-    "1. File DIV (Rupiah)", type=["xlsx", "csv"], key="div"
-)
-file_kp = st.sidebar.file_uploader(
-    "2. File KP (Qty Krt/Lsn)", type=["xlsx", "csv"], key="kp"
-)
 
-
+# Fungsi untuk membaca file dari GitHub (Otomatis deteksi .xlsx atau .csv / spasi)
 @st.cache_data
-def load_and_process_data(f_div, f_kp):
+def load_data_from_github():
+    file_div_path = None
+    file_kp_path = None
+
+    # Kemungkinan nama file
+    div_candidates = [
+        "DIV_BDB_TEST.xlsx",
+        "DIV BDB TEST.xlsx",
+        "DIV_BDB_TEST.csv",
+        "DIV BDB TEST.csv",
+    ]
+    kp_candidates = [
+        "KP_BDB_TEST.xlsx",
+        "KP BDB TEST.xlsx",
+        "KP_BDB_TEST.csv",
+        "KP BDB TEST.csv",
+    ]
+
+    for f in div_candidates:
+        if os.path.exists(f):
+            file_div_path = f
+            break
+
+    for f in kp_candidates:
+        if os.path.exists(f):
+            file_kp_path = f
+            break
+
+    if not file_div_path or not file_kp_path:
+        raise FileNotFoundError(
+            "File database DIV/KP tidak ditemukan di repository GitHub."
+        )
+
+    # Read DIV
     df_div = (
-        pd.read_csv(f_div) if f_div.name.endswith(".csv") else pd.read_excel(f_div)
+        pd.read_csv(file_div_path)
+        if file_div_path.endswith(".csv")
+        else pd.read_excel(file_div_path)
     )
+    # Read KP
     df_kp = (
-        pd.read_csv(f_kp) if f_kp.name.endswith(".csv") else pd.read_excel(f_kp)
+        pd.read_csv(file_kp_path)
+        if file_kp_path.endswith(".csv")
+        else pd.read_excel(file_kp_path)
     )
 
+    # Clean columns
     cols_to_use = df_kp.columns.difference(df_div.columns).tolist()
     cols_to_use.append("kdCust")
 
+    # Merge
     df_merged = pd.merge(df_div, df_kp[cols_to_use], on="kdCust", how="inner")
     return df_merged
 
 
-if file_div is not None and file_kp is not None:
-    df = load_and_process_data(file_div, file_kp)
+try:
+    df = load_data_from_github()
 
     # 1. PENCARIAN / QUICK FILTER
     col_search1, col_search2 = st.columns([2, 1])
 
-    # Buat list toko untuk Dropdown Filter
     toko_list = (
         df["kdCust"].astype(str) + " - " + df["cust"].astype(str)
     ).unique()
@@ -115,7 +147,6 @@ if file_div is not None and file_kp is not None:
             placeholder="Ketik Kode/Nama Toko...",
         )
 
-    # Filter data berdasarkan input
     selected_code = None
     if selected_toko != "-- Pilih Toko --":
         selected_code = selected_toko.split(" - ")[0]
@@ -130,11 +161,10 @@ if file_div is not None and file_kp is not None:
     if selected_code:
         row = df[df["kdCust"].astype(str) == str(selected_code)].iloc[0]
 
-        # Hitung Nilai Real Omset Bulan Berjalan (Bulan Aktif: SEP26)
+        # Nilai Omset Bulan Berjalan (SEP 26)
         omset_sep26 = row.get("SEP26_AB4", 0)
         rt225_ab4 = row.get("RT225_AB4", 0)
 
-        # Hitung Naik/Turun vs RT2 25
         diff_omset = omset_sep26 - rt225_ab4
         pct_omset = (
             (diff_omset / rt225_ab4 * 100)
@@ -144,7 +174,7 @@ if file_div is not None and file_kp is not None:
         status_arrow = "▲" if diff_omset >= 0 else "▼"
         status_color = "#10b981" if diff_omset >= 0 else "#ef4444"
 
-        # 2. KARTU RINGKASAN ATAS (METRICS CARDS)
+        # 2. METRICS CARDS
         c1, c2, c3 = st.columns(3)
 
         with c1:
@@ -163,7 +193,7 @@ if file_div is not None and file_kp is not None:
 
         with c2:
             st.markdown(
-                f"""
+                """
             <div class="metric-card" style="border-left-color: #9333ea;">
                 <div class="metric-title">KONTRIBUTOR OMSET TERBESAR DIVISI</div>
                 <div class="metric-value">DIVISI AB4</div>
@@ -175,7 +205,7 @@ if file_div is not None and file_kp is not None:
 
         with c3:
             st.markdown(
-                f"""
+                """
             <div class="metric-card" style="border-left-color: #06b6d4;">
                 <div class="metric-title">KATEGORI KONTRIBUTOR TERTINGGI</div>
                 <div class="metric-value" style="font-size: 1.4rem;">ENERGY DRINK VITAMIN</div>
@@ -185,7 +215,7 @@ if file_div is not None and file_kp is not None:
                 unsafe_allow_html=True,
             )
 
-        # 3. INFORMASI TOKO & TABEL PRESISI
+        # 3. TABEL KHUSUS TAHUN 2026 (JAN25 - DES25 DISEMBUYIKAN)
         bln_list = [
             "JAN26",
             "FEB26",
@@ -209,7 +239,6 @@ if file_div is not None and file_kp is not None:
         def gv_raw(suffix):
             return [row.get(f"{b}_{suffix}", 0) for b in bln_list]
 
-        # Template HTML Tabel Presisi
         table_html = f"""
         <div class="omset-table-container">
             <div style="font-size: 15px; font-weight: bold; margin-bottom: 12px; color: #333;">
@@ -291,7 +320,5 @@ if file_div is not None and file_kp is not None:
             "💡 Silakan pilih customer dari dropdown di atas untuk melihat detail omset."
         )
 
-else:
-    st.info(
-        "👈 Silakan upload file **DIV (Rupiah)** dan **KP (Qty)** pada menu sidebar di sebelah kiri."
-    )
+except Exception as e:
+    st.error(f"❌ Terjadi kesalahan saat membaca file database di GitHub: {e}")
