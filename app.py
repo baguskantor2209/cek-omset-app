@@ -19,7 +19,7 @@ st.set_page_config(
     page_title="Bagus SDA AB4", layout="wide", page_icon="📊"
 )
 
-# Custom CSS: Menyembunyikan Header GitHub, Footer Streamlit, dan Badge HP
+# Custom CSS: Sembunyikan Watermark / Footer Streamlit di Mobile (HP) & Desktop
 st.markdown(
     """<style>
 /* Sembunyikan Header Atas (Logo GitHub, Fork, & Main Menu) */
@@ -27,17 +27,41 @@ header { visibility: hidden !important; height: 0px !important; }
 #MainMenu { visibility: hidden !important; }
 .stAppToolbar { display: none !important; }
 
-/* Sembunyikan Footer Bawah & Logo "Hosted with Streamlit" / Profile GitHub */
+/* Sembunyikan Footer, Watermark "Hosted with Streamlit" & "Created by" di HP */
 footer { visibility: hidden !important; height: 0px !important; display: none !important; }
 .stDeployButton { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
 [data-testid="stStatusWidget"] { visibility: hidden !important; }
 [data-testid="stViewerBadge"] { display: none !important; }
 .viewerBadge_container__13vls { display: none !important; }
-iframe[title="streamlit_app"] { bottom: 0 !important; }
+div[class*="viewerBadge"] { display: none !important; }
+div[class*="styles_viewerBadge"] { display: none !important; }
+div[class*="Profile"] { display: none !important; }
 
 /* Style Tampilan Dashboard */
 .stApp { background-color: #f8f9fa; color: #111827; }
+
+/* Custom Styling Tombol Download PDF */
+div.stDownloadButton > button {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    border-radius: 8px !important;
+    border: none !important;
+    padding: 12px 24px !important;
+    font-size: 14px !important;
+    box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2) !important;
+    transition: all 0.3s ease !important;
+}
+div.stDownloadButton > button:hover {
+    background-color: #1d4ed8 !important;
+    color: #ffffff !important;
+    box-shadow: 0 6px 12px rgba(29, 78, 216, 0.3) !important;
+}
+div.stDownloadButton > button p {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+}
 
 /* Metric Cards */
 .metric-card {
@@ -744,7 +768,7 @@ Nama Toko : <b>{row['cust']}</b>
         except AttributeError:
             st.markdown(table_html, unsafe_allow_html=True)
 
-        # Tombol Download PDF Landscape Center
+        # Tombol Download PDF Landscape Center dengan Warna Biru Terang
         pdf_bytes = generate_pdf_landscape(row, bln_list)
         st.markdown("<br>", unsafe_allow_html=True)
         col_pdf1, col_pdf2, col_pdf3 = st.columns([1, 2, 1])
