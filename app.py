@@ -16,32 +16,33 @@ from reportlab.platypus import (
 import streamlit as st
 
 st.set_page_config(
-    page_title="Bagus SDA AB4", layout="wide", page_icon="📊"
+    page_title="Dashboard Cek Omset Toko", layout="wide", page_icon="📊"
 )
 
-# Custom CSS: Sembunyikan Watermark / Footer Streamlit di Mobile (HP) & Desktop
+# Custom CSS: Sembunyikan Watermark / Footer / Header / Badge Streamlit Cloud di HP & Desktop
 st.markdown(
     """<style>
-/* Sembunyikan Header Atas (Logo GitHub, Fork, & Main Menu) */
-header { visibility: hidden !important; height: 0px !important; }
-#MainMenu { visibility: hidden !important; }
-.stAppToolbar { display: none !important; }
+/* 1. Sembunyikan Header Atas & Menus */
+header { visibility: hidden !important; height: 0px !important; display: none !important; }
+#MainMenu { visibility: hidden !important; display: none !important; }
+.stAppToolbar { display: none !important; visibility: hidden !important; }
 
-/* Sembunyikan Footer, Watermark "Hosted with Streamlit" & "Created by" di HP */
+/* 2. Sembunyikan Footer, Watermark "Hosted with Streamlit" & "Created by" di HP & PC */
 footer { visibility: hidden !important; height: 0px !important; display: none !important; }
 .stDeployButton { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
-[data-testid="stStatusWidget"] { visibility: hidden !important; }
-[data-testid="stViewerBadge"] { display: none !important; }
+[data-testid="stStatusWidget"] { visibility: hidden !important; display: none !important; }
+[data-testid="stViewerBadge"] { display: none !important; visibility: hidden !important; }
 .viewerBadge_container__13vls { display: none !important; }
-div[class*="viewerBadge"] { display: none !important; }
-div[class*="styles_viewerBadge"] { display: none !important; }
+div[class*="viewerBadge"] { display: none !important; visibility: hidden !important; }
+div[class*="styles_viewerBadge"] { display: none !important; visibility: hidden !important; }
 div[class*="Profile"] { display: none !important; }
+iframe[title="streamlit_app"] { bottom: 0 !important; }
 
-/* Style Tampilan Dashboard */
+/* 3. Style Tampilan Dashboard */
 .stApp { background-color: #f8f9fa; color: #111827; }
 
-/* Custom Styling Tombol Download PDF */
+/* Custom Styling Tombol Download PDF (Biru Terang & Teks Putih Tebal) */
 div.stDownloadButton > button {
     background-color: #2563eb !important;
     color: #ffffff !important;
@@ -138,7 +139,7 @@ div.stDownloadButton > button p {
 st.title("📊 Dashboard Cek Omset & KP Toko")
 
 
-# Helper pembaca CSV pintar
+# Helper pembaca CSV pintar (tahan berbagai delimiter & encoding)
 def read_file_fast(file_path):
     if file_path.endswith(".csv.gz") or file_path.endswith(".csv"):
         for enc in ["utf-8", "latin-1", "cp1252"]:
@@ -205,7 +206,7 @@ def load_data_from_github():
     return pd.merge(df_div, df_kp[cols_to_use], on="kdCust", how="inner")
 
 
-# Helper Format Angka
+# Helper Format Angka: Jika 0 / 0.0 diubah jadi '-'
 def f_num(val):
     try:
         val = float(val)
@@ -582,7 +583,7 @@ try:
         status_arrow = "▲" if diff_omset >= 0 else "▼"
         status_color = "#10b981" if diff_omset >= 0 else "#ef4444"
 
-        # hitung kontributor terbesar dinamis antar divisi
+        # Hitung kontributor terbesar dinamis antar divisi
         div_sums = {
             "DIVISI AB4": sum(
                 [
