@@ -68,13 +68,12 @@ st.markdown(
 st.title("📊 Dashboard Cek Omset & KP Toko")
 
 
-# Fungsi untuk membaca file dari GitHub (Otomatis deteksi .xlsx atau .csv / spasi)
+# Fungsi pembaca data dari GitHub yang aman dari error engine Excel
 @st.cache_data
 def load_data_from_github():
     file_div_path = None
     file_kp_path = None
 
-    # Kemungkinan nama file
     div_candidates = [
         "DIV_BDB_TEST.xlsx",
         "DIV BDB TEST.xlsx",
@@ -103,24 +102,22 @@ def load_data_from_github():
             "File database DIV/KP tidak ditemukan di repository GitHub."
         )
 
-    # Read DIV
-    df_div = (
-        pd.read_csv(file_div_path)
-        if file_div_path.endswith(".csv")
-        else pd.read_excel(file_div_path)
-    )
-    # Read KP
-    df_kp = (
-        pd.read_csv(file_kp_path)
-        if file_kp_path.endswith(".csv")
-        else pd.read_excel(file_kp_path)
-    )
+    # Baca file DIV
+    if file_div_path.endswith(".csv"):
+        df_div = pd.read_csv(file_div_path)
+    else:
+        df_div = pd.read_excel(file_div_path, engine="openpyxl")
 
-    # Clean columns
+    # Baca file KP
+    if file_kp_path.endswith(".csv"):
+        df_kp = pd.read_csv(file_kp_path)
+    else:
+        df_kp = pd.read_excel(file_kp_path, engine="openpyxl")
+
+    # Clean & Merge
     cols_to_use = df_kp.columns.difference(df_div.columns).tolist()
     cols_to_use.append("kdCust")
 
-    # Merge
     df_merged = pd.merge(df_div, df_kp[cols_to_use], on="kdCust", how="inner")
     return df_merged
 
@@ -215,7 +212,7 @@ try:
                 unsafe_allow_html=True,
             )
 
-        # 3. TABEL KHUSUS TAHUN 2026 (JAN25 - DES25 DISEMBUYIKAN)
+        # 3. TABEL HANYA TAHUN 2026
         bln_list = [
             "JAN26",
             "FEB26",
