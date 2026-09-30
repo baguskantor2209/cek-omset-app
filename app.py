@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(
-    page_title="Dashboard Cek Omset Toko", layout="wide", page_icon="📊"
+    page_title="Bagus SDA AB4", layout="wide", page_icon="📊"
 )
 
 # Custom CSS Responsif HP + Desktop
@@ -86,30 +86,33 @@ st.markdown(
 st.title("📊 Dashboard Cek Omset & KP Toko")
 
 
-def read_csv_safe(file_path):
-    try:
-        return pd.read_csv(file_path, encoding="utf-8")
-    except UnicodeDecodeError:
-        try:
-            return pd.read_csv(file_path, encoding="latin-1")
-        except Exception:
-            return pd.read_csv(file_path, encoding="cp1252")
+# Fungsi pembaca file kompresi cepat (.gz / .csv / .xlsx)
+def read_file_fast(file_path):
+    if file_path.endswith(".csv.gz") or file_path.endswith(".csv"):
+        for enc in ["utf-8", "latin-1", "cp1252"]:
+            try:
+                return pd.read_csv(file_path, encoding=enc, on_bad_lines="skip")
+            except Exception:
+                continue
+    return pd.read_excel(file_path, engine="openpyxl")
 
 
 @st.cache_data
 def load_data_from_github():
     file_div_path, file_kp_path = None, None
+
+    # Mengutamakan file kompresi .csv.gz
     div_candidates = [
+        "DIV_BDB_TEST.csv.gz",
+        "DIV BDB TEST.csv.gz",
         "DIV_BDB_TEST.csv",
-        "DIV BDB TEST.csv",
         "DIV_BDB_TEST.xlsx",
-        "DIV BDB TEST.xlsx",
     ]
     kp_candidates = [
+        "KP_BDB_TEST.csv.gz",
+        "KP BDB TEST.csv.gz",
         "KP_BDB_TEST.csv",
-        "KP BDB TEST.csv",
         "KP_BDB_TEST.xlsx",
-        "KP BDB TEST.xlsx",
     ]
 
     for f in div_candidates:
@@ -124,21 +127,15 @@ def load_data_from_github():
     if not file_div_path or not file_kp_path:
         raise FileNotFoundError("File database tidak ditemukan di GitHub.")
 
-    if file_div_path.endswith(".csv"):
-        df_div = read_csv_safe(file_div_path)
-    else:
-        df_div = pd.read_excel(file_div_path, engine="openpyxl")
-
-    if file_kp_path.endswith(".csv"):
-        df_kp = read_csv_safe(file_kp_path)
-    else:
-        df_kp = pd.read_excel(file_kp_path, engine="openpyxl")
+    df_div = read_file_fast(file_div_path)
+    df_kp = read_file_fast(file_kp_path)
 
     cols_to_use = df_kp.columns.difference(df_div.columns).tolist()
     cols_to_use.append("kdCust")
     return pd.merge(df_div, df_kp[cols_to_use], on="kdCust", how="inner")
 
 
+# Helper Format Angka
 def f_num(val):
     try:
         val = float(val)
@@ -156,7 +153,7 @@ def f_dec(val):
 
 
 try:
-    with st.spinner("⏳ Memuat data..."):
+    with st.spinner("⚡ Memuat data super cepat..."):
         df = load_data_from_github()
 
     toko_options = (
@@ -267,12 +264,14 @@ Nama Toko : <b>{row['cust']}</b>
 <tr><td class="center">{f_num(row.get('RT225_UCW',0))}</td><td class="center">{f_num(row.get('SM225_UCW',0))}</td><td class="center bold-col">5</td><td class="left bold-col">UCW</td><td class="center">Krt</td>{fmt_v('UCW')}</tr>
 <tr><td class="center">{f_num(row.get('RT225_ISO',0))}</td><td class="center">{f_num(row.get('SM225_ISO',0))}</td><td class="center bold-col">6</td><td class="left bold-col">ISO</td><td class="center">Krt</td>{fmt_v('ISO')}</tr>
 
+<!-- SUB-TOTAL ENERGY DRINK -->
 <tr class="row-category">
 <td class="center">{f_dec(row.get('RT225_EDV',0))}</td><td class="center">{f_dec(row.get('SM225_EDV',0))}</td>
 <td colspan="2" class="left bold-col" style="padding-left:10px;">ENERGY DRINK VITAMIN</td><td class="center">Jt Rp</td>
 {fmt_raw('EDV')}
 </tr>
 
+<!-- HOME CARE -->
 <tr><td class="center">{f_num(row.get('RT225_CZLSN',0))}</td><td class="center">{f_num(row.get('SM225_CZLSN',0))}</td><td class="center bold-col">7</td><td class="left bold-col">CZ</td><td class="center">Lsn</td>{fmt_v('CZLSN')}</tr>
 <tr><td class="center">{f_num(row.get('RT225_CZKRT',0))}</td><td class="center">{f_num(row.get('SM225_CZKRT',0))}</td><td class="center bold-col"></td><td class="left bold-col">CZ</td><td class="center">Krt</td>{fmt_v('CZKRT')}</tr>
 <tr><td class="center">{f_num(row.get('RT225_R3',0))}</td><td class="center">{f_num(row.get('SM225_R3',0))}</td><td class="center bold-col"></td><td class="left bold-col">R3</td><td class="center">Krt</td>{fmt_v('R3')}</tr>
@@ -282,12 +281,14 @@ Nama Toko : <b>{row['cust']}</b>
 <tr><td class="center">{f_num(row.get('RT225_ALKNONREG',0))}</td><td class="center">{f_num(row.get('SM225_ALKNONREG',0))}</td><td class="center bold-col"></td><td class="left bold-col">ALK NON REG</td><td class="center">Krt</td>{fmt_v('ALKNONREG')}</tr>
 <tr><td class="center">{f_num(row.get('RT225_MAA',0))}</td><td class="center">{f_num(row.get('SM225_MAA',0))}</td><td class="center bold-col">9</td><td class="left bold-col">MAA</td><td class="center">Krt</td>{fmt_v('MAA')}</tr>
 
+<!-- SUB-TOTAL HOME CARE -->
 <tr class="row-category">
 <td class="center">{f_dec(row.get('RT225_HC',0))}</td><td class="center">{f_dec(row.get('SM225_HC',0))}</td>
 <td colspan="2" class="left bold-col" style="padding-left:10px;">HOME CARE</td><td class="center">Jt Rp</td>
 {fmt_raw('HC')}
 </tr>
 
+<!-- TOTAL DIVISI AB4 -->
 <tr class="row-total">
 <td class="center">{f_dec(row.get('RT225_AB4',0))}</td><td class="center">{f_dec(row.get('SM225_AB4',0))}</td>
 <td colspan="2" class="left bold-col" style="padding-left:10px;">DIVISI AB4</td><td class="center">Jt Rp</td>
