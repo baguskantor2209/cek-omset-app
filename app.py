@@ -31,12 +31,12 @@ st.markdown(
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.05);
     margin-top: 15px;
-    overflow-x: auto; /* Mencegah tabel terpotong di HP */
+    overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }
 .report-table {
     width: 100%;
-    min-width: 750px; /* Lebar minimum agar pas diswiper di HP */
+    min-width: 750px;
     border-collapse: collapse;
     font-family: 'Segoe UI', Arial, sans-serif;
     font-size: 12px;
@@ -62,6 +62,7 @@ st.markdown(
 }
 .report-table td.center { text-align: center; }
 .report-table td.left { text-align: left; font-weight: 600; }
+.report-table td.bold-col { font-weight: 700 !important; }
 
 /* Dynamic Row Colors */
 .row-category { background-color: #002060 !important; color: #ffffff !important; font-weight: bold; }
@@ -129,19 +130,38 @@ def load_data_from_github():
     return pd.merge(df_div, df_kp[cols_to_use], on="kdCust", how="inner")
 
 
+# Helper Fungsi Format Nilai: Jika 0 / 0.0 maka diubah jadi '-'
+def f_num(val):
+    try:
+        val = float(val)
+        return f"{val:,.0f}" if val != 0 else "-"
+    except (ValueError, TypeError):
+        return "-"
+
+
+def f_dec(val):
+    try:
+        val = float(val)
+        return f"{val:,.1f}" if val != 0 else "-"
+    except (ValueError, TypeError):
+        return "-"
+
+
 try:
     with st.spinner("⏳ Memuat data..."):
         df = load_data_from_github()
 
-    # PILIH / CARI TOKO (Pencarian Tunggal Berbasis Autocomplete)
+    # Opsi daftar toko
     toko_options = (
         df["kdCust"].astype(str) + " - " + df["cust"].astype(str)
     ).unique()
 
+    # Searchbox Default Kosong
     selected_toko = st.selectbox(
         "🔍 CARI NAMA TOKO / KODE CUSTOMER:",
         options=list(toko_options),
-        index=0,
+        index=None,
+        placeholder="Ketik Kode / Nama Toko Disini...",
         help="Ketik kode customer atau nama toko untuk memfilter secara langsung.",
     )
 
@@ -160,7 +180,7 @@ try:
         status_arrow = "▲" if diff_omset >= 0 else "▼"
         status_color = "#10b981" if diff_omset >= 0 else "#ef4444"
 
-        # Tiga Kartu Ringkasan Atas
+        # Metric Cards
         c1, c2, c3 = st.columns([1, 1, 1])
         with c1:
             st.markdown(
@@ -207,16 +227,13 @@ try:
         def fmt_v(suffix):
             tds = ""
             for b in bln_list:
-                v = row.get(f"{b}_{suffix}", 0)
-                txt = f"{v:,.1f}".replace(".0", "") if v != 0 else "-"
-                tds += f"<td>{txt}</td>"
+                tds += f"<td>{f_num(row.get(f'{b}_{suffix}', 0))}</td>"
             return tds
 
         def fmt_raw(suffix):
             tds = ""
             for b in bln_list:
-                v = row.get(f"{b}_{suffix}", 0)
-                tds += f"<td>{v:,.1f}</td>"
+                tds += f"<td>{f_dec(row.get(f'{b}_{suffix}', 0))}</td>"
             return tds
 
         table_html = f"""<div class="omset-table-container">
@@ -237,52 +254,52 @@ Nama Toko : <b>{row['cust']}</b>
 </tr>
 </thead>
 <tbody>
-<tr><td class="center">{row.get('RT225_TOR',0):,.0f}</td><td class="center">{row.get('SM225_TOR',0):,.0f}</td><td class="center">1</td><td class="left">TOR</td><td class="center">Krt</td>{fmt_v('TOR')}</tr>
-<tr><td class="center">{row.get('RT225_UCV',0):,.0f}</td><td class="center">{row.get('SM225_UCV',0):,.0f}</td><td class="center">2</td><td class="left">UCV</td><td class="center">Krt</td>{fmt_v('UCV')}</tr>
-<tr><td class="center">{row.get('RT225_KTD',0):,.0f}</td><td class="center">{row.get('SM225_KTD',0):,.0f}</td><td class="center">3</td><td class="left">KTD</td><td class="center">Krt</td>{fmt_v('KTD')}</tr>
-<tr><td class="center">{row.get('RT225_RBL',0):,.0f}</td><td class="center">{row.get('SM225_RBL',0):,.0f}</td><td class="center">4</td><td class="left">RBLGOLD</td><td class="center">Krt</td>{fmt_v('RBL')}</tr>
-<tr><td class="center">{row.get('RT225_UCW',0):,.0f}</td><td class="center">{row.get('SM225_UCW',0):,.0f}</td><td class="center">5</td><td class="left">UCW</td><td class="center">Krt</td>{fmt_v('UCW')}</tr>
-<tr><td class="center">{row.get('RT225_ISO',0):,.0f}</td><td class="center">{row.get('SM225_ISO',0):,.0f}</td><td class="center">6</td><td class="left">ISO</td><td class="center">Krt</td>{fmt_v('ISO')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_TOR',0))}</td><td class="center">{f_num(row.get('SM225_TOR',0))}</td><td class="center bold-col">1</td><td class="left bold-col">TOR</td><td class="center">Krt</td>{fmt_v('TOR')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_UCV',0))}</td><td class="center">{f_num(row.get('SM225_UCV',0))}</td><td class="center bold-col">2</td><td class="left bold-col">UCV</td><td class="center">Krt</td>{fmt_v('UCV')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_KTD',0))}</td><td class="center">{f_num(row.get('SM225_KTD',0))}</td><td class="center bold-col">3</td><td class="left bold-col">KTD</td><td class="center">Krt</td>{fmt_v('KTD')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_RBL',0))}</td><td class="center">{f_num(row.get('SM225_RBL',0))}</td><td class="center bold-col">4</td><td class="left bold-col">RBLGOLD</td><td class="center">Krt</td>{fmt_v('RBL')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_UCW',0))}</td><td class="center">{f_num(row.get('SM225_UCW',0))}</td><td class="center bold-col">5</td><td class="left bold-col">UCW</td><td class="center">Krt</td>{fmt_v('UCW')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_ISO',0))}</td><td class="center">{f_num(row.get('SM225_ISO',0))}</td><td class="center bold-col">6</td><td class="left bold-col">ISO</td><td class="center">Krt</td>{fmt_v('ISO')}</tr>
 
 <!-- SUB-TOTAL ENERGY DRINK -->
 <tr class="row-category">
-<td class="center">{row.get('RT225_EDV',0):,.1f}</td><td class="center">{row.get('SM225_EDV',0):,.1f}</td>
-<td colspan="2" class="left" style="padding-left:10px;">ENERGY DRINK VITAMIN</td><td class="center">Jt Rp</td>
+<td class="center">{f_dec(row.get('RT225_EDV',0))}</td><td class="center">{f_dec(row.get('SM225_EDV',0))}</td>
+<td colspan="2" class="left bold-col" style="padding-left:10px;">ENERGY DRINK VITAMIN</td><td class="center">Jt Rp</td>
 {fmt_raw('EDV')}
 </tr>
 
 <!-- HOME CARE: CZ Lsn, CZ Krt, R3, R06, ALK, ALK REG, ALK NON REG, MAA -->
-<tr><td class="center">{row.get('RT225_CZLSN',0):,.0f}</td><td class="center">{row.get('SM225_CZLSN',0):,.0f}</td><td class="center">7</td><td class="left">CZ</td><td class="center">Lsn</td>{fmt_v('CZLSN')}</tr>
-<tr><td class="center">{row.get('RT225_CZKRT',0):,.0f}</td><td class="center">{row.get('SM225_CZKRT',0):,.0f}</td><td class="center"></td><td class="left">CZ</td><td class="center">Krt</td>{fmt_v('CZKRT')}</tr>
-<tr><td class="center">{row.get('RT225_R3',0):,.0f}</td><td class="center">{row.get('SM225_R3',0):,.0f}</td><td class="center"></td><td class="left">R3</td><td class="center">Krt</td>{fmt_v('R3')}</tr>
-<tr><td class="center">{row.get('RT225_R06EXC',0):,.0f}</td><td class="center">{row.get('SM225_R06EXC',0):,.0f}</td><td class="center"></td><td class="left">R06</td><td class="center">Krt</td>{fmt_v('R06EXC')}</tr>
-<tr><td class="center">{row.get('RT225_ALK',0):,.0f}</td><td class="center">{row.get('SM225_ALK',0):,.0f}</td><td class="center">8</td><td class="left">ALK</td><td class="center">Krt</td>{fmt_v('ALK')}</tr>
-<tr><td class="center">{row.get('RT225_ALKREG',0):,.0f}</td><td class="center">{row.get('SM225_ALKREG',0):,.0f}</td><td class="center"></td><td class="left">ALK REG</td><td class="center">Krt</td>{fmt_v('ALKREG')}</tr>
-<tr><td class="center">{row.get('RT225_ALKNONREG',0):,.0f}</td><td class="center">{row.get('SM225_ALKNONREG',0):,.0f}</td><td class="center"></td><td class="left">ALK NON REG</td><td class="center">Krt</td>{fmt_v('ALKNONREG')}</tr>
-<tr><td class="center">{row.get('RT225_MAA',0):,.0f}</td><td class="center">{row.get('SM225_MAA',0):,.0f}</td><td class="center">9</td><td class="left">MAA</td><td class="center">Krt</td>{fmt_v('MAA')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_CZLSN',0))}</td><td class="center">{f_num(row.get('SM225_CZLSN',0))}</td><td class="center bold-col">7</td><td class="left bold-col">CZ</td><td class="center">Lsn</td>{fmt_v('CZLSN')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_CZKRT',0))}</td><td class="center">{f_num(row.get('SM225_CZKRT',0))}</td><td class="center bold-col"></td><td class="left bold-col">CZ</td><td class="center">Krt</td>{fmt_v('CZKRT')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_R3',0))}</td><td class="center">{f_num(row.get('SM225_R3',0))}</td><td class="center bold-col"></td><td class="left bold-col">R3</td><td class="center">Krt</td>{fmt_v('R3')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_R06EXC',0))}</td><td class="center">{f_num(row.get('SM225_R06EXC',0))}</td><td class="center bold-col"></td><td class="left bold-col">R06</td><td class="center">Krt</td>{fmt_v('R06EXC')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_ALK',0))}</td><td class="center">{f_num(row.get('SM225_ALK',0))}</td><td class="center bold-col">8</td><td class="left bold-col">ALK</td><td class="center">Krt</td>{fmt_v('ALK')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_ALKREG',0))}</td><td class="center">{f_num(row.get('SM225_ALKREG',0))}</td><td class="center bold-col"></td><td class="left bold-col">ALK REG</td><td class="center">Krt</td>{fmt_v('ALKREG')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_ALKNONREG',0))}</td><td class="center">{f_num(row.get('SM225_ALKNONREG',0))}</td><td class="center bold-col"></td><td class="left bold-col">ALK NON REG</td><td class="center">Krt</td>{fmt_v('ALKNONREG')}</tr>
+<tr><td class="center">{f_num(row.get('RT225_MAA',0))}</td><td class="center">{f_num(row.get('SM225_MAA',0))}</td><td class="center bold-col">9</td><td class="left bold-col">MAA</td><td class="center">Krt</td>{fmt_v('MAA')}</tr>
 
 <!-- SUB-TOTAL HOME CARE -->
 <tr class="row-category">
-<td class="center">{row.get('RT225_HC',0):,.1f}</td><td class="center">{row.get('SM225_HC',0):,.1f}</td>
-<td colspan="2" class="left" style="padding-left:10px;">HOME CARE</td><td class="center">Jt Rp</td>
+<td class="center">{f_dec(row.get('RT225_HC',0))}</td><td class="center">{f_dec(row.get('SM225_HC',0))}</td>
+<td colspan="2" class="left bold-col" style="padding-left:10px;">HOME CARE</td><td class="center">Jt Rp</td>
 {fmt_raw('HC')}
 </tr>
 
 <!-- TOTAL DIVISI AB4 -->
 <tr class="row-total">
-<td class="center">{row.get('RT225_AB4',0):,.1f}</td><td class="center">{row.get('SM225_AB4',0):,.1f}</td>
-<td colspan="2" class="left" style="padding-left:10px;">DIVISI AB4</td><td class="center">Jt Rp</td>
+<td class="center">{f_dec(row.get('RT225_AB4',0))}</td><td class="center">{f_dec(row.get('SM225_AB4',0))}</td>
+<td colspan="2" class="left bold-col" style="padding-left:10px;">DIVISI AB4</td><td class="center">Jt Rp</td>
 {fmt_raw('AB4')}
 </tr>
 
 <tr class="row-ab23">
 <td class="center">-</td><td class="center">-</td>
-<td colspan="2" class="left" style="padding-left:10px;">DIVISI AB2</td><td class="center">Jt Rp</td>
+<td colspan="2" class="left bold-col" style="padding-left:10px;">DIVISI AB2</td><td class="center">Jt Rp</td>
 {''.join(['<td>-</td>' for _ in bln_list])}
 </tr>
 <tr class="row-ab23">
 <td class="center">-</td><td class="center">-</td>
-<td colspan="2" class="left" style="padding-left:10px;">DIVISI AB3</td><td class="center">Jt Rp</td>
+<td colspan="2" class="left bold-col" style="padding-left:10px;">DIVISI AB3</td><td class="center">Jt Rp</td>
 {''.join(['<td>-</td>' for _ in bln_list])}
 </tr>
 </tbody>
@@ -293,6 +310,8 @@ Nama Toko : <b>{row['cust']}</b>
             st.html(table_html)
         except AttributeError:
             st.markdown(table_html, unsafe_allow_html=True)
+    else:
+        st.info("💡 Silakan ketik atau pilih toko pada pencarian di atas.")
 
 except Exception as e:
     st.error(f"❌ Error: {e}")
