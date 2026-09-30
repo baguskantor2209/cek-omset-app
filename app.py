@@ -6,65 +6,63 @@ st.set_page_config(
     page_title="Dashboard Cek Omset Toko", layout="wide", page_icon="📊"
 )
 
-# Force tampilan bersih & perbaiki bocor HTML
+# Style CSS dimasukkan secara bersih tanpa indentasi ganda
 st.markdown(
-    """
-<style>
-    .stApp { background-color: #f8f9fa; color: #111827; }
-    .metric-card {
-        background-color: #ffffff;
-        border-radius: 12px;
-        padding: 18px 22px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        border-left: 5px solid #2563eb;
-        margin-bottom: 20px;
-    }
-    .metric-title { color: #4b5563; font-size: 0.82rem; font-weight: 700; text-transform: uppercase; }
-    .metric-value { color: #1e3a8a; font-size: 1.8rem; font-weight: 800; margin: 4px 0; }
-    .metric-subtitle { font-size: 0.85rem; font-weight: 600; }
-    
-    .omset-table-container {
-        background: #ffffff;
-        padding: 24px;
-        border-radius: 14px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        margin-top: 15px;
-        color: #111827;
-    }
-    .report-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-family: 'Segoe UI', Arial, sans-serif;
-        font-size: 13px;
-        color: #111827;
-    }
-    .report-table th {
-        background-color: #00c0f0;
-        color: #000000;
-        font-weight: 700;
-        text-align: center;
-        padding: 8px 4px;
-        border: 1px solid #bce8f1;
-    }
-    .report-table th.blue-header { background-color: #002060; color: #ffffff; }
-    .report-table td {
-        padding: 6px 8px;
-        border: 1px solid #d1d5db;
-        text-align: right;
-        color: #111827;
-        background-color: #ffffff;
-    }
-    .report-table td.center { text-align: center; }
-    .report-table td.left { text-align: left; font-weight: 600; }
-    
-    .row-category { background-color: #002060 !important; color: #ffffff !important; font-weight: bold; }
-    .row-category td { background-color: #002060 !important; color: #ffffff !important; border-color: #001040 !important; }
-    .row-total { background-color: #d92525 !important; color: #ffffff !important; font-weight: bold; }
-    .row-total td { background-color: #d92525 !important; color: #ffffff !important; border-color: #b01010 !important; }
-    .row-ab23 { background-color: #800000 !important; color: #ffffff !important; font-weight: bold; }
-    .row-ab23 td { background-color: #800000 !important; color: #ffffff !important; border-color: #500000 !important; }
-</style>
-""",
+    """<style>
+.stApp { background-color: #f8f9fa; color: #111827; }
+.metric-card {
+    background-color: #ffffff;
+    border-radius: 12px;
+    padding: 18px 22px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    border-left: 5px solid #2563eb;
+    margin-bottom: 20px;
+}
+.metric-title { color: #4b5563; font-size: 0.82rem; font-weight: 700; text-transform: uppercase; }
+.metric-value { color: #1e3a8a; font-size: 1.8rem; font-weight: 800; margin: 4px 0; }
+.metric-subtitle { font-size: 0.85rem; font-weight: 600; }
+
+.omset-table-container {
+    background: #ffffff;
+    padding: 24px;
+    border-radius: 14px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    margin-top: 15px;
+    color: #111827;
+}
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    color: #111827;
+}
+.report-table th {
+    background-color: #00c0f0;
+    color: #000000;
+    font-weight: 700;
+    text-align: center;
+    padding: 8px 4px;
+    border: 1px solid #bce8f1;
+}
+.report-table th.blue-header { background-color: #002060; color: #ffffff; }
+.report-table td {
+    padding: 6px 8px;
+    border: 1px solid #d1d5db;
+    text-align: right;
+    color: #111827;
+    background-color: #ffffff;
+}
+.report-table td.center { text-align: center; }
+.report-table td.left { text-align: left; font-weight: 600; }
+
+.row-category { background-color: #002060 !important; color: #ffffff !important; font-weight: bold; }
+.row-category td { background-color: #002060 !important; color: #ffffff !important; border-color: #001040 !important; }
+.row-total { background-color: #d92525 !important; color: #ffffff !important; font-weight: bold; }
+.row-total td { background-color: #d92525 !important; color: #ffffff !important; border-color: #b01010 !important; }
+.row-ab23 { background-color: #800000 !important; color: #ffffff !important; font-weight: bold; }
+.row-ab23 td { background-color: #800000 !important; color: #ffffff !important; border-color: #500000 !important; }
+</style>""",
     unsafe_allow_html=True,
 )
 
@@ -163,37 +161,31 @@ try:
         c1, c2, c3 = st.columns(3)
         with c1:
             st.markdown(
-                f"""
-            <div class="metric-card" style="border-left-color: #2563eb;">
-                <div class="metric-title">REAL OMSET BULAN BERJALAN DIVISI AB4</div>
-                <div class="metric-value">Rp {omset_sep26:,.1f} Jt</div>
-                <div class="metric-subtitle" style="color: {status_color};">
-                    {status_arrow} {abs(pct_omset):,.1f}% vs RT2 25 ({diff_omset:+,.1f} Jt)
-                </div>
-            </div>
-            """,
+                f"""<div class="metric-card" style="border-left-color: #2563eb;">
+<div class="metric-title">REAL OMSET BULAN BERJALAN DIVISI AB4</div>
+<div class="metric-value">Rp {omset_sep26:,.1f} Jt</div>
+<div class="metric-subtitle" style="color: {status_color};">
+{status_arrow} {abs(pct_omset):,.1f}% vs RT2 25 ({diff_omset:+,.1f} Jt)
+</div>
+</div>""",
                 unsafe_allow_html=True,
             )
         with c2:
             st.markdown(
-                """
-            <div class="metric-card" style="border-left-color: #9333ea;">
-                <div class="metric-title">KONTRIBUTOR OMSET TERBESAR DIVISI</div>
-                <div class="metric-value">DIVISI AB4</div>
-                <div class="metric-subtitle" style="color: #9333ea;">Penyumbang Omset Utama</div>
-            </div>
-            """,
+                """<div class="metric-card" style="border-left-color: #9333ea;">
+<div class="metric-title">KONTRIBUTOR OMSET TERBESAR DIVISI</div>
+<div class="metric-value">DIVISI AB4</div>
+<div class="metric-subtitle" style="color: #9333ea;">Penyumbang Omset Utama</div>
+</div>""",
                 unsafe_allow_html=True,
             )
         with c3:
             st.markdown(
-                """
-            <div class="metric-card" style="border-left-color: #06b6d4;">
-                <div class="metric-title">KATEGORI KONTRIBUTOR TERTINGGI</div>
-                <div class="metric-value" style="font-size: 1.4rem;">ENERGY DRINK VITAMIN</div>
-                <div class="metric-subtitle" style="color: #06b6d4;">Volume Penjualan Terbesar</div>
-            </div>
-            """,
+                """<div class="metric-card" style="border-left-color: #06b6d4;">
+<div class="metric-title">KATEGORI KONTRIBUTOR TERTINGGI</div>
+<div class="metric-value" style="font-size: 1.4rem;">ENERGY DRINK VITAMIN</div>
+<div class="metric-subtitle" style="color: #06b6d4;">Volume Penjualan Terbesar</div>
+</div>""",
                 unsafe_allow_html=True,
             )
 
@@ -224,73 +216,72 @@ try:
                 tds += f"<td>{v:,.1f}</td>"
             return tds
 
-        table_html = f"""
-        <div class="omset-table-container">
-            <div style="font-size: 15px; font-weight: bold; margin-bottom: 12px;">
-                Kode Cust : <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 4px;">{row['kdCust']}</span><br>
-                Nama Toko : <b>{row['cust']}</b>
-            </div>
-            <table class="report-table">
-                <thead>
-                    <tr>
-                        <th class="blue-header" style="width: 60px;">RT2 25</th>
-                        <th class="blue-header" style="width: 60px;">SM2 25</th>
-                        <th style="width: 30px;">No</th>
-                        <th style="text-align: left;">KP</th>
-                        <th style="width: 50px;">Satuan</th>
-                        <th>JAN 26</th><th>FEB 26</th><th>MAR 26</th><th>APR 26</th>
-                        <th>MEI 26</th><th>JUN 26</th><th>JUL 26</th><th>AGT 26</th><th>SEP 26</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td class="center">{row.get('RT225_TOR',0):,.0f}</td><td class="center">{row.get('SM225_TOR',0):,.0f}</td><td class="center">1</td><td class="left">TOR</td><td class="center">Krt</td>{fmt_v('TOR')}</tr>
-                    <tr><td class="center">{row.get('RT225_UCV',0):,.0f}</td><td class="center">{row.get('SM225_UCV',0):,.0f}</td><td class="center">2</td><td class="left">UCV</td><td class="center">Krt</td>{fmt_v('UCV')}</tr>
-                    <tr><td class="center">{row.get('RT225_KTD',0):,.0f}</td><td class="center">{row.get('SM225_KTD',0):,.0f}</td><td class="center">3</td><td class="left">KTD</td><td class="center">Krt</td>{fmt_v('KTD')}</tr>
-                    <tr><td class="center">{row.get('RT225_RBL',0):,.0f}</td><td class="center">{row.get('SM225_RBL',0):,.0f}</td><td class="center">4</td><td class="left">RBLGOLD</td><td class="center">Krt</td>{fmt_v('RBL')}</tr>
-                    <tr><td class="center">{row.get('RT225_UCW',0):,.0f}</td><td class="center">{row.get('SM225_UCW',0):,.0f}</td><td class="center">5</td><td class="left">UCW</td><td class="center">Krt</td>{fmt_v('UCW')}</tr>
-                    <tr><td class="center">{row.get('RT225_ISO',0):,.0f}</td><td class="center">{row.get('SM225_ISO',0):,.0f}</td><td class="center">6</td><td class="left">ISO</td><td class="center">Krt</td>{fmt_v('ISO')}</tr>
-                    
-                    <tr class="row-category">
-                        <td class="center">{row.get('RT225_EDV',0):,.1f}</td><td class="center">{row.get('SM225_EDV',0):,.1f}</td>
-                        <td colspan="2" class="left" style="padding-left:10px;">ENERGY DRINK VITAMIN</td><td class="center">Jt Rp</td>
-                        {fmt_raw('EDV')}
-                    </tr>
+        table_html = f"""<div class="omset-table-container">
+<div style="font-size: 15px; font-weight: bold; margin-bottom: 12px;">
+Kode Cust : <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 4px;">{row['kdCust']}</span><br>
+Nama Toko : <b>{row['cust']}</b>
+</div>
+<table class="report-table">
+<thead>
+<tr>
+<th class="blue-header" style="width: 60px;">RT2 25</th>
+<th class="blue-header" style="width: 60px;">SM2 25</th>
+<th style="width: 30px;">No</th>
+<th style="text-align: left;">KP</th>
+<th style="width: 50px;">Satuan</th>
+<th>JAN 26</th><th>FEB 26</th><th>MAR 26</th><th>APR 26</th>
+<th>MEI 26</th><th>JUN 26</th><th>JUL 26</th><th>AGT 26</th><th>SEP 26</th>
+</tr>
+</thead>
+<tbody>
+<tr><td class="center">{row.get('RT225_TOR',0):,.0f}</td><td class="center">{row.get('SM225_TOR',0):,.0f}</td><td class="center">1</td><td class="left">TOR</td><td class="center">Krt</td>{fmt_v('TOR')}</tr>
+<tr><td class="center">{row.get('RT225_UCV',0):,.0f}</td><td class="center">{row.get('SM225_UCV',0):,.0f}</td><td class="center">2</td><td class="left">UCV</td><td class="center">Krt</td>{fmt_v('UCV')}</tr>
+<tr><td class="center">{row.get('RT225_KTD',0):,.0f}</td><td class="center">{row.get('SM225_KTD',0):,.0f}</td><td class="center">3</td><td class="left">KTD</td><td class="center">Krt</td>{fmt_v('KTD')}</tr>
+<tr><td class="center">{row.get('RT225_RBL',0):,.0f}</td><td class="center">{row.get('SM225_RBL',0):,.0f}</td><td class="center">4</td><td class="left">RBLGOLD</td><td class="center">Krt</td>{fmt_v('RBL')}</tr>
+<tr><td class="center">{row.get('RT225_UCW',0):,.0f}</td><td class="center">{row.get('SM225_UCW',0):,.0f}</td><td class="center">5</td><td class="left">UCW</td><td class="center">Krt</td>{fmt_v('UCW')}</tr>
+<tr><td class="center">{row.get('RT225_ISO',0):,.0f}</td><td class="center">{row.get('SM225_ISO',0):,.0f}</td><td class="center">6</td><td class="left">ISO</td><td class="center">Krt</td>{fmt_v('ISO')}</tr>
+<tr class="row-category">
+<td class="center">{row.get('RT225_EDV',0):,.1f}</td><td class="center">{row.get('SM225_EDV',0):,.1f}</td>
+<td colspan="2" class="left" style="padding-left:10px;">ENERGY DRINK VITAMIN</td><td class="center">Jt Rp</td>
+{fmt_raw('EDV')}
+</tr>
+<tr><td class="center">{row.get('RT225_CZLSN',0):,.0f}</td><td class="center">{row.get('SM225_CZLSN',0):,.0f}</td><td class="center">7</td><td class="left">CZ</td><td class="center">Lsn</td>{fmt_v('CZLSN')}</tr>
+<tr><td class="center">{row.get('RT225_CZKRT',0):,.0f}</td><td class="center">{row.get('SM225_CZKRT',0):,.0f}</td><td class="center"></td><td class="left">CZ</td><td class="center">Krt</td>{fmt_v('CZKRT')}</tr>
+<tr><td class="center">{row.get('RT225_R06EXC',0):,.0f}</td><td class="center">{row.get('SM225_R06EXC',0):,.0f}</td><td class="center"></td><td class="left">R06</td><td class="center">Krt</td>{fmt_v('R06EXC')}</tr>
+<tr><td class="center">{row.get('RT225_R3',0):,.0f}</td><td class="center">{row.get('SM225_R3',0):,.0f}</td><td class="center">8</td><td class="left">ALK</td><td class="center">Krt</td>{fmt_v('R3')}</tr>
+<tr><td class="center">{row.get('RT225_ALKREG',0):,.0f}</td><td class="center">{row.get('SM225_ALKREG',0):,.0f}</td><td class="center"></td><td class="left">ALK REG</td><td class="center">Krt</td>{fmt_v('ALKREG')}</tr>
+<tr><td class="center">{row.get('RT225_ALKNONREG',0):,.0f}</td><td class="center">{row.get('SM225_ALKNONREG',0):,.0f}</td><td class="center"></td><td class="left">ALK NON REG</td><td class="center">Krt</td>{fmt_v('ALKNONREG')}</tr>
+<tr><td class="center">{row.get('RT225_MAA',0):,.0f}</td><td class="center">{row.get('SM225_MAA',0):,.0f}</td><td class="center">9</td><td class="left">MAA</td><td class="center">Krt</td>{fmt_v('MAA')}</tr>
+<tr class="row-category">
+<td class="center">{row.get('RT225_HC',0):,.1f}</td><td class="center">{row.get('SM225_HC',0):,.1f}</td>
+<td colspan="2" class="left" style="padding-left:10px;">HOME CARE</td><td class="center">Jt Rp</td>
+{fmt_raw('HC')}
+</tr>
+<tr class="row-total">
+<td class="center">{row.get('RT225_AB4',0):,.1f}</td><td class="center">{row.get('SM225_AB4',0):,.1f}</td>
+<td colspan="2" class="left" style="padding-left:10px;">DIVISI AB4</td><td class="center">Jt Rp</td>
+{fmt_raw('AB4')}
+</tr>
+<tr class="row-ab23">
+<td class="center">-</td><td class="center">-</td>
+<td colspan="2" class="left" style="padding-left:10px;">DIVISI AB2</td><td class="center">Jt Rp</td>
+{''.join(['<td>-</td>' for _ in bln_list])}
+</tr>
+<tr class="row-ab23">
+<td class="center">-</td><td class="center">-</td>
+<td colspan="2" class="left" style="padding-left:10px;">DIVISI AB3</td><td class="center">Jt Rp</td>
+{''.join(['<td>-</td>' for _ in bln_list])}
+</tr>
+</tbody>
+</table>
+</div>"""
 
-                    <tr><td class="center">{row.get('RT225_CZLSN',0):,.0f}</td><td class="center">{row.get('SM225_CZLSN',0):,.0f}</td><td class="center">7</td><td class="left">CZ</td><td class="center">Lsn</td>{fmt_v('CZLSN')}</tr>
-                    <tr><td class="center">{row.get('RT225_CZKRT',0):,.0f}</td><td class="center">{row.get('SM225_CZKRT',0):,.0f}</td><td class="center"></td><td class="left">CZ</td><td class="center">Krt</td>{fmt_v('CZKRT')}</tr>
-                    <tr><td class="center">{row.get('RT225_R06EXC',0):,.0f}</td><td class="center">{row.get('SM225_R06EXC',0):,.0f}</td><td class="center"></td><td class="left">R06</td><td class="center">Krt</td>{fmt_v('R06EXC')}</tr>
-                    <tr><td class="center">{row.get('RT225_R3',0):,.0f}</td><td class="center">{row.get('SM225_R3',0):,.0f}</td><td class="center">8</td><td class="left">ALK</td><td class="center">Krt</td>{fmt_v('R3')}</tr>
-                    <tr><td class="center">{row.get('RT225_ALKREG',0):,.0f}</td><td class="center">{row.get('SM225_ALKREG',0):,.0f}</td><td class="center"></td><td class="left">ALK REG</td><td class="center">Krt</td>{fmt_v('ALKREG')}</tr>
-                    <tr><td class="center">{row.get('RT225_ALKNONREG',0):,.0f}</td><td class="center">{row.get('SM225_ALKNONREG',0):,.0f}</td><td class="center"></td><td class="left">ALK NON REG</td><td class="center">Krt</td>{fmt_v('ALKNONREG')}</tr>
-                    <tr><td class="center">{row.get('RT225_MAA',0):,.0f}</td><td class="center">{row.get('SM225_MAA',0):,.0f}</td><td class="center">9</td><td class="left">MAA</td><td class="center">Krt</td>{fmt_v('MAA')}</tr>
+        # Menggunakan st.components.v1.html / st.html agar 100% aman dirender sebagai visual tabel
+        try:
+            st.html(table_html)
+        except AttributeError:
+            st.markdown(table_html, unsafe_allow_html=True)
 
-                    <tr class="row-category">
-                        <td class="center">{row.get('RT225_HC',0):,.1f}</td><td class="center">{row.get('SM225_HC',0):,.1f}</td>
-                        <td colspan="2" class="left" style="padding-left:10px;">HOME CARE</td><td class="center">Jt Rp</td>
-                        {fmt_raw('HC')}
-                    </tr>
-
-                    <tr class="row-total">
-                        <td class="center">{row.get('RT225_AB4',0):,.1f}</td><td class="center">{row.get('SM225_AB4',0):,.1f}</td>
-                        <td colspan="2" class="left" style="padding-left:10px;">DIVISI AB4</td><td class="center">Jt Rp</td>
-                        {fmt_raw('AB4')}
-                    </tr>
-
-                    <tr class="row-ab23">
-                        <td class="center">-</td><td class="center">-</td>
-                        <td colspan="2" class="left" style="padding-left:10px;">DIVISI AB2</td><td class="center">Jt Rp</td>
-                        {''.join(['<td>-</td>' for _ in bln_list])}
-                    </tr>
-                    <tr class="row-ab23">
-                        <td class="center">-</td><td class="center">-</td>
-                        <td colspan="2" class="left" style="padding-left:10px;">DIVISI AB3</td><td class="center">Jt Rp</td>
-                        {''.join(['<td>-</td>' for _ in bln_list])}
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        """
-        st.markdown(table_html, unsafe_allow_html=True)
     else:
         st.info("💡 Silakan pilih toko pada pencarian di atas.")
 
