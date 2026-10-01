@@ -1,0 +1,15 @@
+name: Keep Streamlit Awake
+
+on:
+  schedule:
+    # Berjalan otomatis setiap 7 jam sekali
+    - cron: '0 */7 * * *'
+  workflow_dispatch: # Tombol manual jika ingin mengetes
+
+jobs:
+  ping-streamlit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit Cloud App
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" https://bagussdaab4.streamlit.app/
