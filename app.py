@@ -135,12 +135,14 @@ div.stDownloadButton > button p {
     unsafe_allow_html=True,
 )
 
-st.title("📊 Dashboard Laporan Omset Toko")
+st.title("📊 Dashboard Cek Omset Toko")
 
 
-# Helper pembaca CSV pintar
+# Helper pembaca file cepat (Mendukung Parquet, CSV terkompresi, CSV biasa, dan Excel)
 def read_file_fast(file_path):
-    if file_path.endswith(".csv.gz") or file_path.endswith(".csv"):
+    if file_path.endswith(".parquet"):
+        return pd.read_parquet(file_path)
+    elif file_path.endswith(".csv.gz") or file_path.endswith(".csv"):
         for enc in ["utf-8", "latin-1", "cp1252"]:
             for sep in [None, ",", ";", "\t"]:
                 try:
@@ -168,7 +170,10 @@ def read_file_fast(file_path):
 def load_data_from_github():
     file_div_path, file_kp_path = None, None
 
+    # Mengutamakan format .parquet
     div_candidates = [
+        "DIV_BDB_TEST.parquet",
+        "DIV BDB TEST.parquet",
         "DIV_BDB_TEST.csv.gz",
         "DIV BDB TEST.csv.gz",
         "DIV_BDB_TEST.csv",
@@ -177,6 +182,8 @@ def load_data_from_github():
         "DIV BDB TEST.xlsx",
     ]
     kp_candidates = [
+        "KP_BDB_TEST.parquet",
+        "KP BDB TEST.parquet",
         "KP_BDB_TEST.csv.gz",
         "KP BDB TEST.csv.gz",
         "KP_BDB_TEST.csv",
@@ -222,7 +229,7 @@ def f_dec(val):
         return "-"
 
 
-# Helper Format Bulan Cantik (misal: "SEP26" -> "SEP 2026" / "September 2026")
+# Helper Format Bulan
 def format_month_label(bln_code):
     months_map = {
         "JAN": "Januari",
@@ -566,7 +573,7 @@ def generate_pdf_multi_toko(rows_list, bln_list):
 
         elements.append(pdf_table)
 
-        # Tambahkan PageBreak jika bukan toko terakhir
+        # PageBreak jika bukan toko terakhir
         if idx < len(rows_list) - 1:
             elements.append(PageBreak())
 
@@ -576,7 +583,7 @@ def generate_pdf_multi_toko(rows_list, bln_list):
 
 
 try:
-    with st.spinner("⚡ Memuat data..."):
+    with st.spinner("⚡ Memuat data Parquet..."):
         df = load_data_from_github()
 
     toko_options = (
@@ -624,30 +631,21 @@ try:
             status_arrow = "▲" if diff_omset >= 0 else "▼"
             status_color = "#10b981" if diff_omset >= 0 else "#ef4444"
 
-            # 1. Hitung Kontributor Terbesar Dinamis Antar Divisi (Akumulasi Total Bulan)
+            # 1. Hitung Kontributor Terbesar Dinamis Antar Divisi
             div_sums = {
                 "DIVISI AB4": sum(
-                    [
-                        float(row.get(f"{b}_AB4", 0) or 0)
-                        for b in bln_list
-                    ]
+                    [float(row.get(f"{b}_AB4", 0) or 0) for b in bln_list]
                 ),
                 "DIVISI AB2": sum(
-                    [
-                        float(row.get(f"{b}_AB2", 0) or 0)
-                        for b in bln_list
-                    ]
+                    [float(row.get(f"{b}_AB2", 0) or 0) for b in bln_list]
                 ),
                 "DIVISI AB3": sum(
-                    [
-                        float(row.get(f"{b}_AB3", 0) or 0)
-                        for b in bln_list
-                    ]
+                    [float(row.get(f"{b}_AB3", 0) or 0) for b in bln_list]
                 ),
             }
             top_div = max(div_sums, key=div_sums.get)
 
-            # 2. Hitung Omset Tunggal Terbesar (Max Single Cell antar Divisi & Bulan)
+            # 2. Hitung Omset Tunggal Terbesar
             max_val = -1.0
             max_div_name = "DIVISI AB4"
             max_month_code = "SEP26"
