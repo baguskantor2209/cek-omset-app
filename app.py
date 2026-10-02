@@ -88,7 +88,7 @@ div.stDownloadButton > button p {
 }
 .report-table {
     width: 100%;
-    min-width: 750px;
+    min-width: 800px;
     border-collapse: collapse;
     font-family: 'Segoe UI', Arial, sans-serif;
     font-size: 12px;
@@ -138,7 +138,7 @@ div.stDownloadButton > button p {
 st.title("📊 Dashboard Cek Omset Toko")
 
 
-# Helper pembaca file cepat (Mendukung Parquet, CSV terkompresi, CSV biasa, dan Excel)
+# Helper pembaca file cepat
 def read_file_fast(file_path):
     if file_path.endswith(".parquet"):
         return pd.read_parquet(file_path)
@@ -170,7 +170,6 @@ def read_file_fast(file_path):
 def load_data_from_github():
     file_div_path, file_kp_path = None, None
 
-    # Mengutamakan format .parquet
     div_candidates = [
         "DIV_BDB_TEST.parquet",
         "DIV BDB TEST.parquet",
@@ -241,6 +240,7 @@ def format_month_label(bln_code):
         "JUL": "Juli",
         "AGT": "Agustus",
         "SEP": "September",
+        "OKT": "Oktober",
     }
     code = str(bln_code).upper()
     prefix = code[:3]
@@ -248,16 +248,16 @@ def format_month_label(bln_code):
     return f"{m_name} 2026" if "26" in code else f"{m_name}"
 
 
-# Fungsi Generate PDF Multi-Toko (1 Toko Per Lembar)
+# Fungsi Generate PDF Multi-Toko
 def generate_pdf_multi_toko(rows_list, bln_list):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
         pagesize=landscape(A4),
-        rightMargin=20,
-        leftMargin=20,
-        topMargin=20,
-        bottomMargin=20,
+        rightMargin=15,
+        leftMargin=15,
+        topMargin=15,
+        bottomMargin=15,
     )
 
     elements = []
@@ -266,18 +266,18 @@ def generate_pdf_multi_toko(rows_list, bln_list):
     title_style = ParagraphStyle(
         "TitleStyle",
         parent=styles["Heading1"],
-        fontSize=15,
-        alignment=1,  # Center
+        fontSize=14,
+        alignment=1,
         textColor=colors.HexColor("#002060"),
-        spaceAfter=8,
+        spaceAfter=6,
     )
 
     info_style = ParagraphStyle(
         "InfoStyle",
         parent=styles["Normal"],
-        fontSize=10,
-        alignment=1,  # Center
-        spaceAfter=10,
+        fontSize=9,
+        alignment=1,
+        spaceAfter=8,
     )
 
     headers = [
@@ -295,6 +295,7 @@ def generate_pdf_multi_toko(rows_list, bln_list):
         "JUL 26",
         "AGT 26",
         "SEP 26",
+        "OKT 26",
     ]
 
     for idx, row in enumerate(rows_list):
@@ -313,7 +314,7 @@ def generate_pdf_multi_toko(rows_list, bln_list):
                 width="100%",
                 thickness=1,
                 color=colors.HexColor("#002060"),
-                spaceAfter=12,
+                spaceAfter=10,
             )
         )
 
@@ -507,9 +508,9 @@ def generate_pdf_multi_toko(rows_list, bln_list):
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+            ("TOPPADDING", (0, 0), (-1, -1), 2.5),
             ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
         ]
 
@@ -567,13 +568,12 @@ def generate_pdf_multi_toko(rows_list, bln_list):
 
             r_idx += 1
 
-        col_widths = [50, 50, 25, 110, 45] + [48] * 9
+        col_widths = [45, 45, 20, 100, 40] + [42] * 10
         pdf_table = Table(table_data, colWidths=col_widths, hAlign="CENTER")
         pdf_table.setStyle(TableStyle(t_style))
 
         elements.append(pdf_table)
 
-        # PageBreak jika bukan toko terakhir
         if idx < len(rows_list) - 1:
             elements.append(PageBreak())
 
@@ -590,7 +590,6 @@ try:
         df["kdCust"].astype(str) + " - " + df["cust"].astype(str)
     ).unique()
 
-    # PILIH MULTI TOKO (Maksimal 5 Toko)
     selected_tokos = st.multiselect(
         "🔍 CARI & PILIH TOKO (MAKSIMAL 5 TOKO):",
         options=list(toko_options),
@@ -599,6 +598,7 @@ try:
         help="Anda dapat memilih hingga 5 toko sekaligus.",
     )
 
+    # Tambahkan OKT26
     bln_list = [
         "JAN26",
         "FEB26",
@@ -609,20 +609,20 @@ try:
         "JUL26",
         "AGT26",
         "SEP26",
+        "OKT26",
     ]
 
     if selected_tokos:
         selected_rows = []
 
-        # Menampilkan setiap toko yang dipilih
         for selected_toko in selected_tokos:
             selected_code = selected_toko.split(" - ")[0]
             row = df[df["kdCust"].astype(str) == str(selected_code)].iloc[0]
             selected_rows.append(row)
 
-            omset_sep26 = row.get("SEP26_AB4", 0)
+            omset_okt26 = row.get("OKT26_AB4", 0)
             rt225_ab4 = row.get("RT225_AB4", 0)
-            diff_omset = omset_sep26 - rt225_ab4
+            diff_omset = omset_okt26 - rt225_ab4
             pct_omset = (
                 (diff_omset / rt225_ab4 * 100)
                 if rt225_ab4 and rt225_ab4 > 0
@@ -631,7 +631,7 @@ try:
             status_arrow = "▲" if diff_omset >= 0 else "▼"
             status_color = "#10b981" if diff_omset >= 0 else "#ef4444"
 
-            # 1. Hitung Kontributor Terbesar Dinamis Antar Divisi
+            # 1. Kontributor Terbesar
             div_sums = {
                 "DIVISI AB4": sum(
                     [float(row.get(f"{b}_AB4", 0) or 0) for b in bln_list]
@@ -645,10 +645,10 @@ try:
             }
             top_div = max(div_sums, key=div_sums.get)
 
-            # 2. Hitung Omset Tunggal Terbesar
+            # 2. Omset Terbesar
             max_val = -1.0
             max_div_name = "DIVISI AB4"
-            max_month_code = "SEP26"
+            max_month_code = "OKT26"
 
             for div_code, div_label in [
                 ("AB4", "DIVISI AB4"),
@@ -664,13 +664,12 @@ try:
 
             max_month_str = format_month_label(max_month_code)
 
-            # Metric Cards per toko
             c1, c2, c3 = st.columns([1, 1, 1])
             with c1:
                 st.markdown(
                     f"""<div class="metric-card" style="border-left-color: #2563eb;">
-<div class="metric-title">REAL OMSET SEP 26 DIVISI AB4</div>
-<div class="metric-value">Rp {omset_sep26:,.1f} Jt</div>
+<div class="metric-title">REAL OMSET OKT 26 DIVISI AB4</div>
+<div class="metric-value">Rp {omset_okt26:,.1f} Jt</div>
 <div class="metric-subtitle" style="color: {status_color};">
 {status_arrow} {abs(pct_omset):,.1f}% vs RT2 25 ({diff_omset:+,.1f} Jt)
 </div>
@@ -725,7 +724,7 @@ Nama Toko : <b>{row['cust']}</b>
 <th style="text-align: left;">KP</th>
 <th style="width: 45px;">Satuan</th>
 <th>JAN 26</th><th>FEB 26</th><th>MAR 26</th><th>APR 26</th>
-<th>MEI 26</th><th>JUN 26</th><th>JUL 26</th><th>AGT 26</th><th>SEP 26</th>
+<th>MEI 26</th><th>JUN 26</th><th>JUL 26</th><th>AGT 26</th><th>SEP 26</th><th>OKT 26</th>
 </tr>
 </thead>
 <tbody>
@@ -787,7 +786,6 @@ Nama Toko : <b>{row['cust']}</b>
             except AttributeError:
                 st.markdown(table_html, unsafe_allow_html=True)
 
-        # Tombol Download PDF Gabungan Multi-Toko (1 Toko Per Lembar)
         pdf_bytes = generate_pdf_multi_toko(selected_rows, bln_list)
         st.markdown("<br>", unsafe_allow_html=True)
         col_pdf1, col_pdf2, col_pdf3 = st.columns([1, 2, 1])
