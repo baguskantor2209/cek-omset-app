@@ -1,15 +1,15 @@
-name: Keep Streamlit Awake
+name: Keep Streamlit App Awake
 
 on:
   schedule:
-    # Berjalan otomatis setiap 7 jam sekali
-    - cron: '0 */7 * * *'
-  workflow_dispatch: # Tombol manual jika ingin mengetes
+    # Berjalan otomatis setiap 3 hari sekali pada jam 00:00 UTC
+    - cron: '0 0 */3 * *'
+  workflow_dispatch: # Memungkinkan tombol 'Run workflow' manual di GitHub Actions
 
 jobs:
-  ping-streamlit:
+  ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Streamlit Cloud App
+      - name: Ping Streamlit App
         run: |
-          curl -s -o /dev/null -w "%{http_code}" https://bagussdaab4.streamlit.app/
+          curl -s -I "https://bagussdaab4.streamlit.app/" | head -n 1
