@@ -43,11 +43,6 @@ div.stDownloadButton > button {
     border: none !important;
     padding: 12px 24px !important;
     font-size: 14px !important;
-    box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2) !important;
-}
-div.stDownloadButton > button:hover {
-    background-color: #1d4ed8 !important;
-    color: #ffffff !important;
 }
 
 .metric-card {
@@ -105,13 +100,6 @@ div.stDownloadButton > button:hover {
 .row-category td { background-color: #002060 !important; color: #ffffff !important; border-color: #001040 !important; }
 .row-total { background-color: #d92525 !important; color: #ffffff !important; font-weight: bold; }
 .row-total td { background-color: #d92525 !important; color: #ffffff !important; border-color: #b01010 !important; }
-
-@media (max-width: 768px) {
-    .metric-value { font-size: 1.2rem; }
-    .omset-table-container { padding: 10px; }
-    .report-table { font-size: 11px; }
-    .report-table th, .report-table td { padding: 5px 4px; }
-}
 </style>""",
     unsafe_allow_html=True,
 )
@@ -132,21 +120,26 @@ def read_file_fast(file_path):
                         return pd.read_csv(file_path, encoding=enc, sep=sep, engine="python", on_bad_lines="skip")
                 except Exception:
                     continue
-    return pd.read_excel(file_path, engine="openpyxl")
+    
+    # BACA EXCEL LENGKAP TERMASUK TAB SHEET 'DP' ATAU SHEET LAINNYA
+    xls = pd.ExcelFile(file_path, engine="openpyxl")
+    sheet_to_use = "DP" if "DP" in xls.sheet_names else xls.sheet_names[0]
+    return pd.read_excel(xls, sheet_name=sheet_to_use)
+
+
+def clean_str(val):
+    if pd.isna(val):
+        return ""
+    return str(val).strip().upper()
 
 
 @st.cache_data
 def load_data_from_github():
-    # 1. Cari File Database Utama
+    # 1. Baca Database Parquet
     bdb_candidates = [
-        "BDB_AB4.parquet",
-        "BDB AB4.parquet",
-        "BDB_AB4.csv.gz",
-        "BDB AB4.csv.gz",
-        "BDB_AB4.csv",
-        "BDB AB4.csv",
-        "BDB_AB4.xlsx",
-        "BDB AB4.xlsx",
+        "BDB_AB4.parquet", "BDB AB4.parquet", "BDB_AB4.csv.gz",
+        "BDB AB4.csv.gz", "BDB_AB4.csv", "BDB AB4.csv",
+        "BDB_AB4.xlsx", "BDB AB4.xlsx",
     ]
     target_bdb = None
     for f in bdb_candidates:
@@ -163,18 +156,15 @@ def load_data_from_github():
     kd_cust_col = next((c for c in df_bdb.columns if c.lower() in ["kdcust", "kode customer", "kode_customer"]), "kdCust")
     cust_name_col = next((c for c in df_bdb.columns if c.lower() in ["cust", "nama customer", "nama_customer", "nama toko"]), "cust")
     
-    df_bdb["kdCust"] = df_bdb[kd_cust_col].astype(str).str.strip().str.upper()
+    df_bdb["kdCust_clean"] = df_bdb[kd_cust_col].apply(clean_str)
     df_bdb["cust"] = df_bdb[cust_name_col].astype(str).str.strip()
     if "depo" in df_bdb.columns:
         df_bdb["depo"] = df_bdb["depo"].astype(str).str.strip()
 
-    # 2. Cari File Excel Mapping Grouping
+    # 2. Baca Excel Grouping
     group_candidates = [
-        "Grouping_Toko.xlsx",
-        "Grouping Toko.xlsx",
-        "grouping_toko.xlsx",
-        "List_Grouping.xlsx",
-        "Grouping_Toko.csv",
+        "Grouping_Toko.xlsx", "Grouping Toko.xlsx",
+        "grouping_toko.xlsx", "List_Grouping.xlsx", "Grouping_Toko.csv",
     ]
     target_group = None
     for f in group_candidates:
@@ -193,31 +183,27 @@ def load_data_from_github():
         col_nm_pemilik = col_lookup.get("nama tk pemilik") or col_lookup.get("namatkpemilik")
 
         if col_kd_cust and col_kd_pemilik and col_nm_pemilik:
-            df_group["clean_kd_cust"] = df_group[col_kd_cust].astype(str).str.strip().str.upper()
-            df_group["clean_kd_pemilik"] = df_group[col_kd_pemilik].astype(str).str.strip().str.upper()
+            df_group["clean_kd_cust"] = df_group[col_kd_cust].apply(clean_str)
+            df_group["clean_kd_pemilik"] = df_group[col_kd_pemilik].apply(clean_str)
             df_group["clean_nm_pemilik"] = df_group[col_nm_pemilik].astype(str).str.strip()
 
-            group_map = df_group.set_index("clean_kd_cust")[["clean_kd_pemilik", "clean_nm_pemilik"]].to_dict(orient="index")
+            # Buat mapping dictionary
+            map_pemilik_code = df_group.set_index("clean_kd_cust")["clean_kd_pemilik"].to_dict()
+            map_pemilik_name = df_group.set_index("clean_kd_cust")["clean_nm_pemilik"].to_dict()
 
-            def assign_group_info(row):
-                kc = row["kdCust"]
-                if kc in group_map:
-                    kd_pemilik = group_map[kc]["clean_kd_pemilik"]
-                    nm_pemilik = group_map[kc]["clean_nm_pemilik"]
-                    return pd.Series([kd_pemilik, nm_pemilik, True])
-                return pd.Series([kc, row["cust"], False])
-
-            df_bdb[["Kd_Pemilik", "Nama_Pemilik", "Is_Group"]] = df_bdb.apply(assign_group_info, axis=1)
+            df_bdb["Kd_Pemilik"] = df_bdb["kdCust_clean"].map(map_pemilik_code).fillna(df_bdb["kdCust_clean"])
+            df_bdb["Nama_Pemilik"] = df_bdb["kdCust_clean"].map(map_pemilik_name).fillna(df_bdb["cust"])
+            df_bdb["Is_Group"] = df_bdb["kdCust_clean"].isin(map_pemilik_code)
         else:
-            df_bdb["Kd_Pemilik"] = df_bdb["kdCust"]
+            df_bdb["Kd_Pemilik"] = df_bdb["kdCust_clean"]
             df_bdb["Nama_Pemilik"] = df_bdb["cust"]
             df_bdb["Is_Group"] = False
     else:
-        df_bdb["Kd_Pemilik"] = df_bdb["kdCust"]
+        df_bdb["Kd_Pemilik"] = df_bdb["kdCust_clean"]
         df_bdb["Nama_Pemilik"] = df_bdb["cust"]
         df_bdb["Is_Group"] = False
 
-    # 3. Kunci Pencarian Berdasarkan Kd_Pemilik
+    # 3. Buat Kunci Pencarian Unik Grouping
     df_bdb["search_code"] = df_bdb["Kd_Pemilik"]
     df_bdb["search_name"] = df_bdb.apply(
         lambda r: f"{r['Nama_Pemilik']} ( Grouping )" if r["Is_Group"] else r["cust"],
@@ -255,7 +241,7 @@ def format_month_label(bln_code):
     return f"{m_name} 2026" if "26" in code else f"{m_name}"
 
 
-# FUNGSI AGREGASI TOTAL OMSET GROUPING TOKO
+# AGREGASI SUM TOTAL DENGAN BENAR
 def aggregate_store_rows(sub_df, bln_list):
     first_row = sub_df.iloc[0].copy()
     
@@ -267,7 +253,6 @@ def aggregate_store_rows(sub_df, bln_list):
         "CZLSN", "CZKRT", "R3", "R06EXC", "ALK", "ALKREG", "ALKNONREG", "MAA", "HC", "AB4"
     ]
     
-    # Sum Rata-rata dan Semester
     for suf in numeric_suffixes:
         col_rt = f"RT225_{suf}"
         col_sm = f"SM225_{suf}"
@@ -276,7 +261,6 @@ def aggregate_store_rows(sub_df, bln_list):
         if col_sm in sub_df:
             first_row[col_sm] = sub_df[col_sm].apply(pd.to_numeric, errors="coerce").sum()
 
-    # Sum Seluruh Omset Bulanan
     for b in bln_list:
         for suf in numeric_suffixes:
             col_name = f"{b}_{suf}"
@@ -287,7 +271,7 @@ def aggregate_store_rows(sub_df, bln_list):
     return first_row
 
 
-# Fungsi Generate PDF Multi-Toko
+# Generate PDF Laporan
 def generate_pdf_multi_toko(rows_list, bln_list):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -316,7 +300,7 @@ def generate_pdf_multi_toko(rows_list, bln_list):
         elements.append(Paragraph("<b>DASHBOARD LAPORAN OMSET TOKO</b>", title_style))
 
         depo_str = str(row.get("depo", "-"))
-        cust_code = str(row.get("search_code", row.get("kdCust", "-")))
+        cust_code = str(row.get("search_code", row.get("kdCust_clean", "-")))
         cust_name = str(row.get("cust", "-"))
 
         info_text = f"<b>Depo:</b> {depo_str} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Kode Cust:</b> {cust_code} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Nama Toko:</b> {cust_name}"
@@ -397,7 +381,7 @@ try:
     with st.spinner("⚡ Memuat database BDB_AB4 & Data Grouping..."):
         df = load_data_from_github()
 
-    # Pilihan toko unik untuk dropdown pencarian
+    # Dropdown Options
     toko_df = df[["search_code", "search_name"]].drop_duplicates()
     toko_options = (toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique()
 
@@ -420,10 +404,10 @@ try:
         for selected_toko in selected_tokos:
             selected_code = selected_toko.split(" - ")[0].strip().upper()
             
-            # AMBIL SEMUA BARIS TOKO CABANG
+            # Saring seluruh cabang toko
             sub_df = df[df["search_code"].astype(str).str.strip().str.upper() == selected_code]
             
-            # PROSES SUM KESELURUHAN CABANG
+            # Sum total
             row = aggregate_store_rows(sub_df, bln_list)
             selected_rows.append(row)
 
@@ -438,7 +422,6 @@ try:
             status_arrow = "▲" if diff_omset >= 0 else "▼"
             status_color = "#10b981" if diff_omset >= 0 else "#ef4444"
 
-            # Hitung Omset AB4 Terbesar
             max_val = -1.0
             max_month_code = "OKT26"
 
