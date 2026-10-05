@@ -121,8 +121,6 @@ div.stDownloadButton > button p {
 .row-category td { background-color: #002060 !important; color: #ffffff !important; border-color: #001040 !important; }
 .row-total { background-color: #d92525 !important; color: #ffffff !important; font-weight: bold; }
 .row-total td { background-color: #d92525 !important; color: #ffffff !important; border-color: #b01010 !important; }
-.row-ab23 { background-color: #800000 !important; color: #ffffff !important; font-weight: bold; }
-.row-ab23 td { background-color: #800000 !important; color: #ffffff !important; border-color: #500000 !important; }
 
 /* Media Query Khusus Layar HP */
 @media (max-width: 768px) {
@@ -168,7 +166,6 @@ def read_file_fast(file_path):
 
 @st.cache_data
 def load_data_from_github():
-    # Daftar kemungkinan penamaan file BDB AB4 tunggal
     bdb_candidates = [
         "BDB AB4.parquet",
         "BDB_AB4.parquet",
@@ -229,7 +226,7 @@ def format_month_label(bln_code):
     return f"{m_name} 2026" if "26" in code else f"{m_name}"
 
 
-# Fungsi Generate PDF Multi-Toko
+# Fungsi Generate PDF Multi-Toko (Tanpa Baris AB2 & AB3)
 def generate_pdf_multi_toko(rows_list, bln_list):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -463,24 +460,6 @@ def generate_pdf_multi_toko(rows_list, bln_list):
                 get_v_list("AB4", False),
                 "total",
             ),
-            (
-                f_dec(row.get("RT225_AB2", 0)),
-                f_dec(row.get("SM225_AB2", 0)),
-                "",
-                "DIVISI AB2",
-                "Jt Rp",
-                get_v_list("AB2", False),
-                "ab23",
-            ),
-            (
-                f_dec(row.get("RT225_AB3", 0)),
-                f_dec(row.get("SM225_AB3", 0)),
-                "",
-                "DIVISI AB3",
-                "Jt Rp",
-                get_v_list("AB3", False),
-                "ab23",
-            ),
         ]
 
         t_style = [
@@ -521,22 +500,6 @@ def generate_pdf_multi_toko(rows_list, bln_list):
                         (0, r_idx),
                         (-1, r_idx),
                         colors.HexColor("#d92525"),
-                    )
-                )
-                t_style.append(
-                    ("TEXTCOLOR", (0, r_idx), (-1, r_idx), colors.white)
-                )
-                t_style.append(
-                    ("FONTNAME", (0, r_idx), (-1, r_idx), "Helvetica-Bold")
-                )
-                t_style.append(("SPAN", (2, r_idx), (3, r_idx)))
-            elif r_type == "ab23":
-                t_style.append(
-                    (
-                        "BACKGROUND",
-                        (0, r_idx),
-                        (-1, r_idx),
-                        colors.HexColor("#800000"),
                     )
                 )
                 t_style.append(
@@ -611,40 +574,19 @@ try:
             status_arrow = "▲" if diff_omset >= 0 else "▼"
             status_color = "#10b981" if diff_omset >= 0 else "#ef4444"
 
-            # 1. Kontributor Terbesar
-            div_sums = {
-                "DIVISI AB4": sum(
-                    [float(row.get(f"{b}_AB4", 0) or 0) for b in bln_list]
-                ),
-                "DIVISI AB2": sum(
-                    [float(row.get(f"{b}_AB2", 0) or 0) for b in bln_list]
-                ),
-                "DIVISI AB3": sum(
-                    [float(row.get(f"{b}_AB3", 0) or 0) for b in bln_list]
-                ),
-            }
-            top_div = max(div_sums, key=div_sums.get)
-
-            # 2. Omset Terbesar
+            # Hitung Omset AB4 Terbesar
             max_val = -1.0
-            max_div_name = "DIVISI AB4"
             max_month_code = "OKT26"
 
-            for div_code, div_label in [
-                ("AB4", "DIVISI AB4"),
-                ("AB2", "DIVISI AB2"),
-                ("AB3", "DIVISI AB3"),
-            ]:
-                for b in bln_list:
-                    val = float(row.get(f"{b}_{div_code}", 0) or 0)
-                    if val > max_val:
-                        max_val = val
-                        max_div_name = div_label
-                        max_month_code = b
+            for b in bln_list:
+                val = float(row.get(f"{b}_AB4", 0) or 0)
+                if val > max_val:
+                    max_val = val
+                    max_month_code = b
 
             max_month_str = format_month_label(max_month_code)
 
-            c1, c2, c3 = st.columns([1, 1, 1])
+            c1, c2 = st.columns([1, 1])
             with c1:
                 st.markdown(
                     f"""<div class="metric-card" style="border-left-color: #2563eb;">
@@ -658,19 +600,10 @@ try:
                 )
             with c2:
                 st.markdown(
-                    f"""<div class="metric-card" style="border-left-color: #9333ea;">
-<div class="metric-title">KONTRIBUTOR OMSET TERBESAR DIVISI</div>
-<div class="metric-value">{top_div}</div>
-<div class="metric-subtitle" style="color: #9333ea;">Penyumbang Omset Utama</div>
-</div>""",
-                    unsafe_allow_html=True,
-                )
-            with c3:
-                st.markdown(
                     f"""<div class="metric-card" style="border-left-color: #06b6d4;">
-<div class="metric-title">OMSET TERBESAR SATUAN</div>
-<div class="metric-value" style="font-size: 1.15rem; line-height: 1.3;">
-Omset Terbesar Jatuh Pada <b>{max_div_name}</b> Pada Bulan <b>{max_month_str}</b>
+<div class="metric-title">OMSET TERBESAR DIVISI AB4</div>
+<div class="metric-value" style="font-size: 1.25rem; line-height: 1.3;">
+Puncak Omset Pada Bulan <b>{max_month_str}</b>
 </div>
 <div class="metric-subtitle" style="color: #06b6d4;">Dengan Jumlah Omset Rp {max_val:,.1f} Jt</div>
 </div>""",
@@ -744,18 +677,6 @@ Nama Toko : <b>{row['cust']}</b>
 <td class="center">{f_dec(row.get('RT225_AB4',0))}</td><td class="center">{f_dec(row.get('SM225_AB4',0))}</td>
 <td colspan="2" class="left bold-col" style="padding-left:10px;">DIVISI AB4</td><td class="center">Jt Rp</td>
 {fmt_raw('AB4')}
-</tr>
-
-<!-- DIVISI AB2 & AB3 -->
-<tr class="row-ab23">
-<td class="center">{f_dec(row.get('RT225_AB2',0))}</td><td class="center">{f_dec(row.get('SM225_AB2',0))}</td>
-<td colspan="2" class="left bold-col" style="padding-left:10px;">DIVISI AB2</td><td class="center">Jt Rp</td>
-{fmt_raw('AB2')}
-</tr>
-<tr class="row-ab23">
-<td class="center">{f_dec(row.get('RT225_AB3',0))}</td><td class="center">{f_dec(row.get('SM225_AB3',0))}</td>
-<td colspan="2" class="left bold-col" style="padding-left:10px;">DIVISI AB3</td><td class="center">Jt Rp</td>
-{fmt_raw('AB3')}
 </tr>
 </tbody>
 </table>
