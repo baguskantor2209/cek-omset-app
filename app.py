@@ -168,47 +168,28 @@ def read_file_fast(file_path):
 
 @st.cache_data
 def load_data_from_github():
-    file_div_path, file_kp_path = None, None
-
-    div_candidates = [
-        "DIV_BDB_TEST.parquet",
-        "DIV BDB TEST.parquet",
-        "DIV_BDB_TEST.csv.gz",
-        "DIV BDB TEST.csv.gz",
-        "DIV_BDB_TEST.csv",
-        "DIV BDB TEST.csv",
-        "DIV_BDB_TEST.xlsx",
-        "DIV BDB TEST.xlsx",
-    ]
-    kp_candidates = [
-        "KP_BDB_TEST.parquet",
-        "KP BDB TEST.parquet",
-        "KP_BDB_TEST.csv.gz",
-        "KP BDB TEST.csv.gz",
-        "KP_BDB_TEST.csv",
-        "KP BDB TEST.csv",
-        "KP_BDB_TEST.xlsx",
-        "KP BDB TEST.xlsx",
+    # Daftar kemungkinan penamaan file BDB AB4 tunggal
+    bdb_candidates = [
+        "BDB AB4.parquet",
+        "BDB_AB4.parquet",
+        "BDB AB4.csv.gz",
+        "BDB_AB4.csv.gz",
+        "BDB AB4.csv",
+        "BDB_AB4.csv",
+        "BDB AB4.xlsx",
+        "BDB_AB4.xlsx",
     ]
 
-    for f in div_candidates:
+    target_file = None
+    for f in bdb_candidates:
         if os.path.exists(f):
-            file_div_path = f
-            break
-    for f in kp_candidates:
-        if os.path.exists(f):
-            file_kp_path = f
+            target_file = f
             break
 
-    if not file_div_path or not file_kp_path:
-        raise FileNotFoundError("File database tidak ditemukan di GitHub.")
+    if not target_file:
+        raise FileNotFoundError("File database 'BDB AB4' tidak ditemukan di GitHub.")
 
-    df_div = read_file_fast(file_div_path)
-    df_kp = read_file_fast(file_kp_path)
-
-    cols_to_use = df_kp.columns.difference(df_div.columns).tolist()
-    cols_to_use.append("kdCust")
-    return pd.merge(df_div, df_kp[cols_to_use], on="kdCust", how="inner")
+    return read_file_fast(target_file)
 
 
 # Helper Format Angka
@@ -583,7 +564,7 @@ def generate_pdf_multi_toko(rows_list, bln_list):
 
 
 try:
-    with st.spinner("⚡ Memuat data Parquet..."):
+    with st.spinner("⚡ Memuat database BDB AB4..."):
         df = load_data_from_github()
 
     toko_options = (
@@ -598,7 +579,6 @@ try:
         help="Anda dapat memilih hingga 5 toko sekaligus.",
     )
 
-    # Tambahkan OKT26
     bln_list = [
         "JAN26",
         "FEB26",
