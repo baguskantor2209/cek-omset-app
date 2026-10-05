@@ -45,6 +45,7 @@ div.stDownloadButton > button {
     padding: 12px 24px !important;
     font-size: 14px !important;
     box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2) !important;
+    transition: all 0.3s ease !important;
 }
 div.stDownloadButton > button:hover {
     background-color: #1d4ed8 !important;
@@ -142,16 +143,16 @@ def read_file_fast(file_path):
 
 @st.cache_data
 def load_data_from_github():
-    # 1. Cari File Database Utama BDB AB4
+    # 1. Cari File Database Utama BDB_AB4 (Gabungan BDB, BTN, DKI)
     bdb_candidates = [
-        "BDB AB4.parquet",
         "BDB_AB4.parquet",
-        "BDB AB4.csv.gz",
+        "BDB AB4.parquet",
         "BDB_AB4.csv.gz",
-        "BDB AB4.csv",
+        "BDB AB4.csv.gz",
         "BDB_AB4.csv",
-        "BDB AB4.xlsx",
+        "BDB AB4.csv",
         "BDB_AB4.xlsx",
+        "BDB AB4.xlsx",
     ]
     target_bdb = None
     for f in bdb_candidates:
@@ -160,10 +161,15 @@ def load_data_from_github():
             break
 
     if not target_bdb:
-        raise FileNotFoundError("File database 'BDB AB4' tidak ditemukan di GitHub.")
+        raise FileNotFoundError("File database gabungan 'BDB_AB4.parquet' tidak ditemukan!")
 
     df_bdb = read_file_fast(target_bdb)
+
+    # Clean string data
     df_bdb["kdCust"] = df_bdb["kdCust"].astype(str).str.strip()
+    df_bdb["cust"] = df_bdb["cust"].astype(str).str.strip()
+    if "depo" in df_bdb.columns:
+        df_bdb["depo"] = df_bdb["depo"].astype(str).str.strip()
 
     # 2. Cari File Excel Mapping Toko Grouping
     group_candidates = [
@@ -179,17 +185,13 @@ def load_data_from_github():
             target_group = f
             break
 
-    # 3. Penggabungan Data Omset & Excel Grouping
     if target_group:
         df_group = read_file_fast(target_group)
-        
-        # Bersihkan nama kolom agar tidak ada karakter tersembunyi/spasi ekstra
         df_group.columns = [str(c).strip() for c in df_group.columns]
         
         if "Kode Customer" in df_group.columns:
             df_group["Kode Customer"] = df_group["Kode Customer"].astype(str).str.strip()
             
-            # Merge data BDB dengan data Excel Grouping
             df_bdb = pd.merge(
                 df_bdb,
                 df_group[["Kode Customer", "Kd Tk Pemilik", "Nama Tk Pemilik", "Toko Induk (V)"]],
@@ -198,7 +200,7 @@ def load_data_from_github():
                 how="left",
             )
 
-    # 4. Buat Kode & Nama Pencarian Khusus
+    # 3. Buat Kode & Nama Pencarian Khusus Toko / Grouping
     if "Kd Tk Pemilik" in df_bdb.columns and "Nama Tk Pemilik" in df_bdb.columns:
         df_bdb["is_group"] = df_bdb["Toko Induk (V)"].astype(str).str.upper().str.strip() == "V"
         
@@ -246,7 +248,7 @@ def format_month_label(bln_code):
     return f"{m_name} 2026" if "26" in code else f"{m_name}"
 
 
-# Fungsi untuk Menggabungkan / Menjumlahkan Seluruh Omset Toko Cabang
+# Fungsi untuk Agregasi/Menjumlahkan Baris Data Jika Toko Induk (Grouping)
 def aggregate_store_rows(sub_df, bln_list):
     if len(sub_df) == 1:
         return sub_df.iloc[0]
@@ -270,7 +272,6 @@ def aggregate_store_rows(sub_df, bln_list):
             if col_name in sub_df:
                 first_row[col_name] = sub_df[col_name].apply(pd.to_numeric, errors="coerce").sum()
 
-    # Label Khusus Jumlah Cabang
     first_row["cust"] = f"{first_row['search_name']} [{len(sub_df)} Toko Cabang]"
     return first_row
 
@@ -382,10 +383,9 @@ def generate_pdf_multi_toko(rows_list, bln_list):
 
 
 try:
-    with st.spinner("⚡ Memuat database & data Toko Grouping..."):
+    with st.spinner("⚡ Memuat database BDB_AB4 & Data Grouping..."):
         df = load_data_from_github()
 
-    # Pilihan Toko unik gabungan
     toko_options = (
         df["search_code"].astype(str) + " - " + df["search_name"].astype(str)
     ).unique()
@@ -409,7 +409,6 @@ try:
         for selected_toko in selected_tokos:
             selected_code = selected_toko.split(" - ")[0]
             
-            # Ambil semua toko cabang jika toko induk
             sub_df = df[df["search_code"].astype(str) == str(selected_code)]
             row = aggregate_store_rows(sub_df, bln_list)
             selected_rows.append(row)
