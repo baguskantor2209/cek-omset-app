@@ -43,6 +43,11 @@ div.stDownloadButton > button {
     border: none !important;
     padding: 12px 24px !important;
     font-size: 14px !important;
+    box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2) !important;
+}
+div.stDownloadButton > button:hover {
+    background-color: #1d4ed8 !important;
+    color: #ffffff !important;
 }
 
 .metric-card {
@@ -120,14 +125,23 @@ def read_file_fast(file_path):
                         return pd.read_csv(file_path, encoding=enc, sep=sep, engine="python", on_bad_lines="skip")
                 except Exception:
                     continue
-    
-    # BACA EXCEL LENGKAP TERMASUK TAB SHEET 'DP' ATAU SHEET LAINNYA
+    return pd.read_excel(file_path, engine="openpyxl")
+
+
+def read_excel_grouping_dp_only(file_path):
+    """Membaca KHUSUS sheet 'DP' dengan header di baris ke-2 (index 1)"""
     xls = pd.ExcelFile(file_path, engine="openpyxl")
-    sheet_to_use = "DP" if "DP" in xls.sheet_names else xls.sheet_names[0]
-    return pd.read_excel(xls, sheet_name=sheet_to_use)
+    sheet_target = "DP" if "DP" in xls.sheet_names else xls.sheet_names[0]
+    
+    # Baca khusus sheet DP dengan header row index 1
+    df_sheet = pd.read_excel(xls, sheet_name=sheet_target, header=1)
+    if "Kode Customer" not in df_sheet.columns:
+        df_sheet = pd.read_excel(xls, sheet_name=sheet_target, header=0)
+        
+    return df_sheet
 
 
-def clean_str(val):
+def clean_code(val):
     if pd.isna(val):
         return ""
     return str(val).strip().upper()
@@ -135,7 +149,7 @@ def clean_str(val):
 
 @st.cache_data
 def load_data_from_github():
-    # 1. Baca Database Parquet
+    # 1. Cari File Database Parquet Utama
     bdb_candidates = [
         "BDB_AB4.parquet", "BDB AB4.parquet", "BDB_AB4.csv.gz",
         "BDB AB4.csv.gz", "BDB_AB4.csv", "BDB AB4.csv",
@@ -156,12 +170,13 @@ def load_data_from_github():
     kd_cust_col = next((c for c in df_bdb.columns if c.lower() in ["kdcust", "kode customer", "kode_customer"]), "kdCust")
     cust_name_col = next((c for c in df_bdb.columns if c.lower() in ["cust", "nama customer", "nama_customer", "nama toko"]), "cust")
     
-    df_bdb["kdCust_clean"] = df_bdb[kd_cust_col].apply(clean_str)
+    df_bdb["kdCust_orig"] = df_bdb[kd_cust_col].astype(str).str.strip().str.upper()
+    df_bdb["kdCust_clean"] = df_bdb["kdCust_orig"].apply(clean_code)
     df_bdb["cust"] = df_bdb[cust_name_col].astype(str).str.strip()
     if "depo" in df_bdb.columns:
         df_bdb["depo"] = df_bdb["depo"].astype(str).str.strip()
 
-    # 2. Baca Excel Grouping
+    # 2. Cari & Baca Excel Grouping (Khusus Sheet DP)
     group_candidates = [
         "Grouping_Toko.xlsx", "Grouping Toko.xlsx",
         "grouping_toko.xlsx", "List_Grouping.xlsx", "Grouping_Toko.csv",
@@ -173,21 +188,15 @@ def load_data_from_github():
             break
 
     if target_group:
-        df_group = read_file_fast(target_group)
+        df_group = read_excel_grouping_dp_only(target_group)
         df_group.columns = [str(c).strip() for c in df_group.columns]
-
-        col_lookup = {str(c).lower().replace("_", " ").strip(): c for c in df_group.columns}
         
-        col_kd_cust = col_lookup.get("kode customer") or col_lookup.get("kdcust")
-        col_kd_pemilik = col_lookup.get("kd tk pemilik") or col_lookup.get("kdtkpemilik")
-        col_nm_pemilik = col_lookup.get("nama tk pemilik") or col_lookup.get("namatkpemilik")
+        if "Kode Customer" in df_group.columns and "Kd Tk Pemilik" in df_group.columns:
+            df_group["clean_kd_cust"] = df_group["Kode Customer"].apply(clean_code)
+            df_group["clean_kd_pemilik"] = df_group["Kd Tk Pemilik"].apply(clean_code)
+            df_group["clean_nm_pemilik"] = df_group["Nama Tk Pemilik"].astype(str).str.strip()
 
-        if col_kd_cust and col_kd_pemilik and col_nm_pemilik:
-            df_group["clean_kd_cust"] = df_group[col_kd_cust].apply(clean_str)
-            df_group["clean_kd_pemilik"] = df_group[col_kd_pemilik].apply(clean_str)
-            df_group["clean_nm_pemilik"] = df_group[col_nm_pemilik].astype(str).str.strip()
-
-            # Buat mapping dictionary
+            # Mapping Kode Customer -> Kode Pemilik & Nama Pemilik
             map_pemilik_code = df_group.set_index("clean_kd_cust")["clean_kd_pemilik"].to_dict()
             map_pemilik_name = df_group.set_index("clean_kd_cust")["clean_nm_pemilik"].to_dict()
 
@@ -203,7 +212,7 @@ def load_data_from_github():
         df_bdb["Nama_Pemilik"] = df_bdb["cust"]
         df_bdb["Is_Group"] = False
 
-    # 3. Buat Kunci Pencarian Unik Grouping
+    # 3. Kunci Pencarian Unik Grouping
     df_bdb["search_code"] = df_bdb["Kd_Pemilik"]
     df_bdb["search_name"] = df_bdb.apply(
         lambda r: f"{r['Nama_Pemilik']} ( Grouping )" if r["Is_Group"] else r["cust"],
@@ -241,7 +250,7 @@ def format_month_label(bln_code):
     return f"{m_name} 2026" if "26" in code else f"{m_name}"
 
 
-# AGREGASI SUM TOTAL DENGAN BENAR
+# AGREGASI TOTAL OMSET GROUPING TOKO
 def aggregate_store_rows(sub_df, bln_list):
     first_row = sub_df.iloc[0].copy()
     
@@ -271,7 +280,7 @@ def aggregate_store_rows(sub_df, bln_list):
     return first_row
 
 
-# Generate PDF Laporan
+# Generate PDF Multi-Toko
 def generate_pdf_multi_toko(rows_list, bln_list):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -300,7 +309,7 @@ def generate_pdf_multi_toko(rows_list, bln_list):
         elements.append(Paragraph("<b>DASHBOARD LAPORAN OMSET TOKO</b>", title_style))
 
         depo_str = str(row.get("depo", "-"))
-        cust_code = str(row.get("search_code", row.get("kdCust_clean", "-")))
+        cust_code = str(row.get("search_code", row.get("kdCust_orig", "-")))
         cust_name = str(row.get("cust", "-"))
 
         info_text = f"<b>Depo:</b> {depo_str} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Kode Cust:</b> {cust_code} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Nama Toko:</b> {cust_name}"
@@ -378,7 +387,7 @@ def generate_pdf_multi_toko(rows_list, bln_list):
 
 
 try:
-    with st.spinner("⚡ Memuat database BDB_AB4 & Data Grouping..."):
+    with st.spinner("⚡ Memuat database BDB_AB4 & Data Grouping Sheet DP..."):
         df = load_data_from_github()
 
     # Dropdown Options
