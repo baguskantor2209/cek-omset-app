@@ -35,7 +35,6 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 
 .stApp { background-color: #f8f9fa; color: #111827; }
 
-/* Custom Styling Tombol Download PDF */
 div.stDownloadButton > button {
     background-color: #2563eb !important;
     color: #ffffff !important;
@@ -45,14 +44,12 @@ div.stDownloadButton > button {
     padding: 12px 24px !important;
     font-size: 14px !important;
     box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2) !important;
-    transition: all 0.3s ease !important;
 }
 div.stDownloadButton > button:hover {
     background-color: #1d4ed8 !important;
     color: #ffffff !important;
 }
 
-/* Metric Cards */
 .metric-card {
     background-color: #ffffff;
     border-radius: 12px;
@@ -65,7 +62,6 @@ div.stDownloadButton > button:hover {
 .metric-value { color: #1e3a8a; font-size: 1.5rem; font-weight: 800; margin: 4px 0; }
 .metric-subtitle { font-size: 0.85rem; font-weight: 600; }
 
-/* Table Container */
 .omset-table-container {
     background: #ffffff;
     padding: 16px;
@@ -105,7 +101,6 @@ div.stDownloadButton > button:hover {
 .report-table td.left { text-align: left; font-weight: 600; }
 .report-table td.bold-col { font-weight: 700 !important; }
 
-/* Dynamic Row Colors */
 .row-category { background-color: #002060 !important; color: #ffffff !important; font-weight: bold; }
 .row-category td { background-color: #002060 !important; color: #ffffff !important; border-color: #001040 !important; }
 .row-total { background-color: #d92525 !important; color: #ffffff !important; font-weight: bold; }
@@ -124,7 +119,6 @@ div.stDownloadButton > button:hover {
 st.title("📊 Dashboard Cek Omset Toko")
 
 
-# Helper pembaca file cepat
 def read_file_fast(file_path):
     if file_path.endswith(".parquet"):
         return pd.read_parquet(file_path)
@@ -166,7 +160,6 @@ def load_data_from_github():
     df_bdb = read_file_fast(target_bdb)
     df_bdb.columns = [str(c).strip() for c in df_bdb.columns]
     
-    # Deteksi nama kolom kdCust & cust di Parquet secara fleksibel
     kd_cust_col = next((c for c in df_bdb.columns if c.lower() in ["kdcust", "kode customer", "kode_customer"]), "kdCust")
     cust_name_col = next((c for c in df_bdb.columns if c.lower() in ["cust", "nama customer", "nama_customer", "nama toko"]), "cust")
     
@@ -193,24 +186,16 @@ def load_data_from_github():
         df_group = read_file_fast(target_group)
         df_group.columns = [str(c).strip() for c in df_group.columns]
 
-        # Peta Nama Kolom Fleksibel (Mencegah Error 'Kode Customer')
         col_lookup = {str(c).lower().replace("_", " ").strip(): c for c in df_group.columns}
         
-        col_kd_cust = col_lookup.get("kode customer") or col_lookup.get("kdcust") or col_lookup.get("kd cust")
-        col_kd_pemilik = col_lookup.get("kd tk pemilik") or col_lookup.get("kdtkpemilik") or col_lookup.get("kode tk pemilik")
-        col_nm_pemilik = col_lookup.get("nama tk pemilik") or col_lookup.get("namatkpemilik") or col_lookup.get("nama toko pemilik")
-        col_induk = col_lookup.get("toko induk (v)") or col_lookup.get("toko induk") or col_lookup.get("induk")
+        col_kd_cust = col_lookup.get("kode customer") or col_lookup.get("kdcust")
+        col_kd_pemilik = col_lookup.get("kd tk pemilik") or col_lookup.get("kdtkpemilik")
+        col_nm_pemilik = col_lookup.get("nama tk pemilik") or col_lookup.get("namatkpemilik")
 
         if col_kd_cust and col_kd_pemilik and col_nm_pemilik:
             df_group["clean_kd_cust"] = df_group[col_kd_cust].astype(str).str.strip().str.upper()
             df_group["clean_kd_pemilik"] = df_group[col_kd_pemilik].astype(str).str.strip().str.upper()
             df_group["clean_nm_pemilik"] = df_group[col_nm_pemilik].astype(str).str.strip()
-
-            # Buat lookup dictionary Toko Induk
-            if col_induk:
-                induk_custs = set(df_group[df_group[col_induk].astype(str).str.upper().str.strip() == "V"]["clean_kd_pemilik"])
-            else:
-                induk_custs = set(df_group["clean_kd_pemilik"])
 
             group_map = df_group.set_index("clean_kd_cust")[["clean_kd_pemilik", "clean_nm_pemilik"]].to_dict(orient="index")
 
@@ -219,7 +204,7 @@ def load_data_from_github():
                 if kc in group_map:
                     kd_pemilik = group_map[kc]["clean_kd_pemilik"]
                     nm_pemilik = group_map[kc]["clean_nm_pemilik"]
-                    return pd.Series([kd_pemilik, nm_pemilik, True if kd_pemilik in induk_custs else False])
+                    return pd.Series([kd_pemilik, nm_pemilik, True])
                 return pd.Series([kc, row["cust"], False])
 
             df_bdb[["Kd_Pemilik", "Nama_Pemilik", "Is_Group"]] = df_bdb.apply(assign_group_info, axis=1)
@@ -232,7 +217,7 @@ def load_data_from_github():
         df_bdb["Nama_Pemilik"] = df_bdb["cust"]
         df_bdb["Is_Group"] = False
 
-    # 3. Label Pencarian Unik
+    # 3. Kunci Pencarian Berdasarkan Kd_Pemilik
     df_bdb["search_code"] = df_bdb["Kd_Pemilik"]
     df_bdb["search_name"] = df_bdb.apply(
         lambda r: f"{r['Nama_Pemilik']} ( Grouping )" if r["Is_Group"] else r["cust"],
@@ -270,20 +255,19 @@ def format_month_label(bln_code):
     return f"{m_name} 2026" if "26" in code else f"{m_name}"
 
 
-# Fungsi untuk Menggabungkan Omset Seluruh Cabang Toko Grouping
+# FUNGSI AGREGASI TOTAL OMSET GROUPING TOKO
 def aggregate_store_rows(sub_df, bln_list):
-    if len(sub_df) == 1:
-        row = sub_df.iloc[0].copy()
-        return row
-
     first_row = sub_df.iloc[0].copy()
     
+    if len(sub_df) == 1:
+        return first_row
+
     numeric_suffixes = [
         "TOR", "UCV", "KTD", "RBL", "UCW", "ISO", "EDV",
         "CZLSN", "CZKRT", "R3", "R06EXC", "ALK", "ALKREG", "ALKNONREG", "MAA", "HC", "AB4"
     ]
     
-    # Aggregasi RT225 dan SM225
+    # Sum Rata-rata dan Semester
     for suf in numeric_suffixes:
         col_rt = f"RT225_{suf}"
         col_sm = f"SM225_{suf}"
@@ -292,7 +276,7 @@ def aggregate_store_rows(sub_df, bln_list):
         if col_sm in sub_df:
             first_row[col_sm] = sub_df[col_sm].apply(pd.to_numeric, errors="coerce").sum()
 
-    # Aggregasi Bulanan (JAN26 - OKT26)
+    # Sum Seluruh Omset Bulanan
     for b in bln_list:
         for suf in numeric_suffixes:
             col_name = f"{b}_{suf}"
@@ -413,7 +397,7 @@ try:
     with st.spinner("⚡ Memuat database BDB_AB4 & Data Grouping..."):
         df = load_data_from_github()
 
-    # Pilihan toko unik untuk dropdown
+    # Pilihan toko unik untuk dropdown pencarian
     toko_df = df[["search_code", "search_name"]].drop_duplicates()
     toko_options = (toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique()
 
@@ -434,9 +418,12 @@ try:
         selected_rows = []
 
         for selected_toko in selected_tokos:
-            selected_code = selected_toko.split(" - ")[0].strip()
+            selected_code = selected_toko.split(" - ")[0].strip().upper()
             
-            sub_df = df[df["search_code"].astype(str).str.strip().str.upper() == selected_code.upper()]
+            # AMBIL SEMUA BARIS TOKO CABANG
+            sub_df = df[df["search_code"].astype(str).str.strip().str.upper() == selected_code]
+            
+            # PROSES SUM KESELURUHAN CABANG
             row = aggregate_store_rows(sub_df, bln_list)
             selected_rows.append(row)
 
