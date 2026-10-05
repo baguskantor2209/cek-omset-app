@@ -125,20 +125,27 @@ def read_file_fast(file_path):
                         return pd.read_csv(file_path, encoding=enc, sep=sep, engine="python", on_bad_lines="skip")
                 except Exception:
                     continue
-    return pd.read_excel(file_path, engine="openpyxl")
+    return pd.read_excel(file_path)
 
 
 def read_excel_grouping_dp_only(file_path):
-    """Membaca KHUSUS sheet 'DP' dengan header di baris ke-2 (index 1)"""
-    xls = pd.ExcelFile(file_path, engine="openpyxl")
-    sheet_target = "DP" if "DP" in xls.sheet_names else xls.sheet_names[0]
-    
-    # Baca khusus sheet DP dengan header row index 1
-    df_sheet = pd.read_excel(xls, sheet_name=sheet_target, header=1)
-    if "Kode Customer" not in df_sheet.columns:
-        df_sheet = pd.read_excel(xls, sheet_name=sheet_target, header=0)
+    """Membaca sheet 'DP' (atau sheet pertama) secara aman tanpa error"""
+    try:
+        xls = pd.ExcelFile(file_path)
+        # Cari nama sheet 'DP' secara fleksibel
+        dp_sheet = next((s for s in xls.sheet_names if s.strip().upper() == "DP"), xls.sheet_names[0])
         
-    return df_sheet
+        # Coba header di baris ke-2 (index 1)
+        df_sheet = pd.read_excel(xls, sheet_name=dp_sheet, header=1)
+        df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
+        
+        if "Kode Customer" not in df_sheet.columns:
+            df_sheet = pd.read_excel(xls, sheet_name=dp_sheet, header=0)
+            df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
+            
+        return df_sheet
+    except Exception:
+        return pd.read_excel(file_path)
 
 
 def clean_code(val):
@@ -189,12 +196,17 @@ def load_data_from_github():
 
     if target_group:
         df_group = read_excel_grouping_dp_only(target_group)
-        df_group.columns = [str(c).strip() for c in df_group.columns]
         
-        if "Kode Customer" in df_group.columns and "Kd Tk Pemilik" in df_group.columns:
-            df_group["clean_kd_cust"] = df_group["Kode Customer"].apply(clean_code)
-            df_group["clean_kd_pemilik"] = df_group["Kd Tk Pemilik"].apply(clean_code)
-            df_group["clean_nm_pemilik"] = df_group["Nama Tk Pemilik"].astype(str).str.strip()
+        # Peta kolom fleksibel
+        col_lookup = {str(c).lower().replace("_", " ").strip(): c for c in df_group.columns}
+        col_kd_cust = col_lookup.get("kode customer") or col_lookup.get("kdcust")
+        col_kd_pemilik = col_lookup.get("kd tk pemilik") or col_lookup.get("kdtkpemilik")
+        col_nm_pemilik = col_lookup.get("nama tk pemilik") or col_lookup.get("namatkpemilik")
+
+        if col_kd_cust and col_kd_pemilik and col_nm_pemilik:
+            df_group["clean_kd_cust"] = df_group[col_kd_cust].apply(clean_code)
+            df_group["clean_kd_pemilik"] = df_group[col_kd_pemilik].apply(clean_code)
+            df_group["clean_nm_pemilik"] = df_group[col_nm_pemilik].astype(str).str.strip()
 
             # Mapping Kode Customer -> Kode Pemilik & Nama Pemilik
             map_pemilik_code = df_group.set_index("clean_kd_cust")["clean_kd_pemilik"].to_dict()
@@ -387,7 +399,7 @@ def generate_pdf_multi_toko(rows_list, bln_list):
 
 
 try:
-    with st.spinner("⚡ Memuat database BDB_AB4 & Data Grouping Sheet DP..."):
+    with st.spinner("⚡ Memuat database BDB_AB4 & Data Grouping..."):
         df = load_data_from_github()
 
     # Dropdown Options
