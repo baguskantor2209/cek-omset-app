@@ -129,7 +129,7 @@ st.title("📊 Dashboard Cek Omset Toko")
 
 st.markdown(
     f"<div style='text-align: right; margin-top: -35px; margin-bottom: 20px; color: #4b5563; font-size: 15px;'>"
-    f"🕘 Last Updated BDB_AB4: &nbsp;<span style='color: #2563eb; font-weight: bold;'>{get_github_last_updated()}</span>"
+    f"🕘 Last Updated : &nbsp;<span style='color: #2563eb; font-weight: bold;'>{get_github_last_updated()}</span>"
     f"</div>", 
     unsafe_allow_html=True
 )
