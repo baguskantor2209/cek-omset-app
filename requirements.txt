@@ -5,3 +5,4 @@ fastparquet
 openpyxl
 reportlab
 pytz
+requests
