@@ -38,7 +38,7 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 
 .stApp { background-color: #f8f9fa; color: #111827; }
 
-/* WARNA TOMBOL DOWNLOAD PDF (SELALU BIRU TERANG & TEXT PUTIH) */
+/* WARNA TOMBOL DOWNLOAD PDF */
 [data-testid="stDownloadButton"] button {
     background-color: #2563eb !important;
     border: none !important;
@@ -65,7 +65,7 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 .metric-value { color: #1e3a8a; font-size: 1.5rem; font-weight: 800; margin: 4px 0; }
 .metric-subtitle { font-size: 0.85rem; font-weight: 600; }
 
-/* LEBAR KOLOM TABEL PROPORSIONAL AGAR RAPIH */
+/* LEBAR KOLOM TABEL PROPORSIONAL */
 .omset-table-container {
     background: #ffffff; padding: 16px; border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-top: 15px; margin-bottom: 25px; overflow-x: auto;
@@ -89,41 +89,40 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
     unsafe_allow_html=True,
 )
 
-# --- FUNGSI LAST UPDATED DARI GITHUB API ---
-@st.cache_data(ttl=600)  # Refresh tiap 10 menit
+# --- FUNGSI LAST UPDATED 100% AKURAT DARI GITHUB API ---
+@st.cache_data(ttl=300) # Refresh tiap 5 menit
 def get_github_last_updated():
-    """Mengambil waktu commit terakhir file BDB_AB4 dari GitHub API"""
+    """Tarik waktu aktual BDB_AB4.parquet di-commit ke GitHub"""
+    url = "https://api.github.com/repos/baguskantor2209/cek-omset-app/commits?path=BDB_AB4.parquet&page=1&per_page=1"
     try:
-        # PENTING: Jika repo Anda Private, cara ini tidak bisa dipakai.
-        # Format URL: https://api.github.com/repos/USERNAME/REPO_NAME/commits?path=NAMA_FILE
-        # Karena kita tidak tahu nama repo-nya, kita coba pakai metode os.path.getmtime lagi
-        # TETAPI dikurangi dengan waktu boot Streamlit (sebagai fallback yang lebih cerdas)
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data and len(data) > 0:
+                # Ambil waktu UTC dari GitHub
+                date_str = data[0]['commit']['committer']['date']
+                dt_utc = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                # Ubah ke WIB
+                tz_wib = pytz.timezone('Asia/Jakarta')
+                dt_wib = dt_utc.astimezone(tz_wib)
+                return dt_wib.strftime("%d-%m-%Y %H:%M WIB")
+    except Exception:
         pass
-    except:
-        pass
-        
-    bdb_candidates = ["BDB_AB4.parquet", "BDB AB4.parquet", "BDB_AB4.csv.gz", "BDB_AB4.csv", "BDB_AB4.xlsx"]
-    target_bdb = next((f for f in bdb_candidates if os.path.exists(f)), None)
     
-    if target_bdb:
-        mtime = os.path.getmtime(target_bdb)
-        dt_utc = datetime.fromtimestamp(mtime, tz=timezone.utc)
-        tz_wib = pytz.timezone('Asia/Jakarta')
-        dt_wib = dt_utc.astimezone(tz_wib)
-        return dt_wib.strftime("%d-%m-%Y %H:%M WIB")
-    return "Tidak diketahui"
+    # Fallback jika GitHub sedang error
+    return "Sedang memuat..."
 
-# TATA LETAK JUDUL & LAST UPDATED (DI SEJAJARKAN & DIBERI JARAK)
-st.markdown("<br>", unsafe_allow_html=True)
-c_title, c_date = st.columns([2, 1])
-with c_title:
-    st.markdown("<h1 style='margin-top: -20px;'>📊 Dashboard Cek Omset Toko</h1>", unsafe_allow_html=True)
-with c_date:
-    st.markdown(
-        f"<div style='text-align: right; margin-top: 15px; color: #4b5563; font-size: 15px; font-weight: 500;'>"
-        f"🕘 Last Updated Database:<br><span style='color: #2563eb; font-weight: bold;'>{get_github_last_updated()}</span></div>", 
-        unsafe_allow_html=True
-    )
+# --- TATA LETAK JUDUL & LAST UPDATED YANG RAPI ---
+st.title("📊 Dashboard Cek Omset Toko")
+
+st.markdown(
+    f"<div style='text-align: right; margin-top: -35px; margin-bottom: 20px; color: #4b5563; font-size: 15px;'>"
+    f"🕘 Last Updated: &nbsp;<span style='color: #2563eb; font-weight: bold;'>{get_github_last_updated()}</span>"
+    f"</div>", 
+    unsafe_allow_html=True
+)
+
+st.markdown("<hr style='margin-top: -10px; margin-bottom: 25px;'>", unsafe_allow_html=True)
 
 
 def read_file_fast(file_path):
@@ -157,7 +156,6 @@ def read_grouping_smart(file_path):
 
 
 def map_wilayah(depo_str):
-    """Memetakan Depo ke Wilayah (BANTEN, DKI, BODEBEK) berdasarkan kode unik"""
     val = str(depo_str).upper()
     if pd.isna(depo_str) or val == "NAN" or val == "":
         return "LAINNYA"
@@ -175,7 +173,6 @@ def map_wilayah(depo_str):
 
 @st.cache_data
 def load_data_from_github():
-    # 1. BACA DATA OMSET UTAMA
     bdb_candidates = ["BDB_AB4.parquet", "BDB AB4.parquet", "BDB_AB4.csv.gz", "BDB_AB4.csv", "BDB_AB4.xlsx"]
     target_bdb = next((f for f in bdb_candidates if os.path.exists(f)), None)
 
@@ -188,19 +185,16 @@ def load_data_from_github():
     kd_cust_col = next((c for c in df_bdb.columns if c.lower() in ["kdcust", "kode customer", "kode_customer"]), "kdCust")
     cust_name_col = next((c for c in df_bdb.columns if c.lower() in ["cust", "nama customer", "nama toko"]), "cust")
     
-    # Vectorized string cleaning
     df_bdb["kdCust_orig"] = df_bdb[kd_cust_col].astype(str).str.strip().str.upper()
     df_bdb["kdCust_clean"] = df_bdb["kdCust_orig"].str.replace("-", "", regex=False).str.replace(" ", "", regex=False).str.replace(".", "", regex=False)
     df_bdb["cust"] = df_bdb[cust_name_col].astype(str).str.strip()
     
-    # Deteksi dan Petakan Wilayah
     if "depo" in df_bdb.columns:
         df_bdb["depo"] = df_bdb["depo"].astype(str).str.strip()
         df_bdb["wilayah"] = df_bdb["depo"].apply(map_wilayah)
     else:
         df_bdb["wilayah"] = "LAINNYA"
 
-    # 2. BACA DATA GROUPING (Dinamis: CSV / Parquet / Excel)
     group_candidates = ["Grouping_Toko.parquet", "Grouping_Toko.csv", "Grouping_Toko.xlsx", "Grouping Toko.xlsx"]
     target_group = next((f for f in group_candidates if os.path.exists(f)), None)
 
@@ -228,7 +222,6 @@ def load_data_from_github():
     else:
         df_bdb["Kd_Pemilik"], df_bdb["Nama_Pemilik"], df_bdb["Is_Group"] = df_bdb["kdCust_clean"], df_bdb["cust"], False
 
-    # 3. KUNCI PENCARIAN
     df_bdb["search_code"] = df_bdb["Kd_Pemilik"]
     df_bdb["search_name"] = df_bdb.apply(lambda r: f"{r['Nama_Pemilik']} ( Grouping )" if r["Is_Group"] else r["cust"], axis=1)
 
@@ -338,8 +331,6 @@ def generate_pdf_multi_toko(rows_list, bln_list):
 try:
     with st.spinner("⚡ Memuat database & Sinkronisasi Grouping Toko..."):
         df = load_data_from_github()
-
-    st.markdown("<hr style='margin-top: -10px; margin-bottom: 20px;'>", unsafe_allow_html=True)
 
     # === 1. FILTER BERJENJANG: WILAYAH (BANTEN, DKI, BODEBEK) ===
     if "wilayah" in df.columns:
