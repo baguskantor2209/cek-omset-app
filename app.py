@@ -38,7 +38,7 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 
 .stApp { background-color: #f8f9fa; color: #111827; }
 
-/* WARNA TOMBOL DOWNLOAD PDF (SELALU BIRU TERANG & TEXT PUTIH) */
+/* WARNA TOMBOL DOWNLOAD PDF */
 [data-testid="stDownloadButton"] button {
     background-color: #2563eb !important;
     border: none !important;
@@ -65,7 +65,7 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 .metric-value { color: #1e3a8a; font-size: 1.5rem; font-weight: 800; margin: 4px 0; }
 .metric-subtitle { font-size: 0.85rem; font-weight: 600; }
 
-/* LEBAR KOLOM TABEL PROPORSIONAL AGAR RAPIH */
+/* LEBAR KOLOM TABEL PROPORSIONAL */
 .omset-table-container {
     background: #ffffff; padding: 16px; border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-top: 15px; margin-bottom: 25px; overflow-x: auto;
@@ -354,10 +354,10 @@ try:
         
     list_wilayah.insert(0, "SEMUA WILAYAH")
     
-    # MEMASUKKAN LABEL TEGAS SECARA MANUAL
-    st.markdown("<p style='font-size:16px; font-weight:600; margin-bottom:-10px; color:#1f2937;'>🌍 Filter By Wilayah</p>", unsafe_allow_html=True)
+    # MEMASUKKAN LABEL TEGAS SECARA MANUAL TANPA MARGIN NEGATIF AGAR TIDAK TIMPA-TIMPAAN
+    st.markdown("<div style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🌍 Filter By Wilayah</div>", unsafe_allow_html=True)
     selected_wilayah = st.selectbox(
-        "", 
+        "label_wilayah", 
         options=list_wilayah,
         label_visibility="collapsed"
     )
@@ -373,10 +373,10 @@ try:
     toko_df = df_filtered[["search_code", "search_name"]].drop_duplicates()
     toko_options = (toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique()
 
-    # MEMASUKKAN LABEL TEGAS SECARA MANUAL
-    st.markdown("<p style='font-size:16px; font-weight:600; margin-bottom:-10px; color:#1f2937;'>🔍 Cari Toko</p>", unsafe_allow_html=True)
+    # MEMASUKKAN LABEL TEGAS SECARA MANUAL TANPA MARGIN NEGATIF AGAR TIDAK TIMPA-TIMPAAN
+    st.markdown("<div style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🔍 Cari Toko</div>", unsafe_allow_html=True)
     selected_tokos = st.multiselect(
-        "", 
+        "label_toko", 
         options=list(toko_options), 
         max_selections=5,
         placeholder="Ketik Kode / Nama Toko (Atau Toko Grouping)...",
