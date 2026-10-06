@@ -1,6 +1,8 @@
 import io
 import os
 import traceback
+from datetime import datetime, timezone
+import pytz
 import pandas as pd
 import streamlit as st
 
@@ -86,7 +88,25 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
     unsafe_allow_html=True,
 )
 
+# --- FUNGSI LAST UPDATED ---
+def get_last_updated():
+    """Mengambil waktu modifikasi terakhir file database di GitHub/Streamlit Server"""
+    bdb_candidates = ["BDB_AB4.parquet", "BDB AB4.parquet", "BDB_AB4.csv.gz", "BDB_AB4.csv", "BDB_AB4.xlsx"]
+    target_bdb = next((f for f in bdb_candidates if os.path.exists(f)), None)
+    
+    if target_bdb:
+        mtime = os.path.getmtime(target_bdb)
+        # Ambil waktu UTC dari sistem file
+        dt_utc = datetime.fromtimestamp(mtime, tz=timezone.utc)
+        # Konversi ke WIB (Asia/Jakarta)
+        tz_wib = pytz.timezone('Asia/Jakarta')
+        dt_wib = dt_utc.astimezone(tz_wib)
+        return dt_wib.strftime("%d-%m-%Y %H:%M WIB")
+    return "Tidak diketahui"
+
 st.title("📊 Dashboard Cek Omset Toko")
+# TAMPILKAN LAST UPDATED
+st.markdown(f"<div style='margin-top: -15px; margin-bottom: 20px; color: #6b7280; font-size: 14px;'>🕒 <b>Last Updated Database:</b> {get_last_updated()}</div>", unsafe_allow_html=True)
 
 
 def read_file_fast(file_path):
