@@ -1,15 +1,15 @@
-name: Keep Streamlit App Awake
+name: Keep Streamlit App Alive
 
 on:
   schedule:
-    # Berjalan otomatis setiap 3 hari sekali pada jam 00:00 UTC
-    - cron: '0 0 */3 * *'
-  workflow_dispatch: # Memungkinkan tombol 'Run workflow' manual di GitHub Actions
+    # Berjalan setiap 12 jam (jangan terlalu sering agar tidak diblokir GitHub)
+    - cron: "0 */12 * * *"
+  workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Streamlit App
-        run: |
-          curl -s -I "https://bagussdaab4.streamlit.app/" | head -n 1
+        # Ganti URL di bawah dengan URL aplikasi Streamlit Anda
+        run: curl -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -L "https://nama-aplikasi-anda.streamlit.app"
