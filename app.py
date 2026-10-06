@@ -38,7 +38,7 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 
 .stApp { background-color: #f8f9fa; color: #111827; }
 
-/* WARNA TOMBOL DOWNLOAD PDF */
+/* WARNA TOMBOL DOWNLOAD PDF (SELALU BIRU TERANG & TEXT PUTIH) */
 [data-testid="stDownloadButton"] button {
     background-color: #2563eb !important;
     border: none !important;
@@ -65,7 +65,7 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 .metric-value { color: #1e3a8a; font-size: 1.5rem; font-weight: 800; margin: 4px 0; }
 .metric-subtitle { font-size: 0.85rem; font-weight: 600; }
 
-/* LEBAR KOLOM TABEL PROPORSIONAL */
+/* LEBAR KOLOM TABEL PROPORSIONAL AGAR RAPIH */
 .omset-table-container {
     background: #ffffff; padding: 16px; border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-top: 15px; margin-bottom: 25px; overflow-x: auto;
@@ -85,11 +85,14 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 .row-category td { background-color: #002060 !important; color: #ffffff !important; border-color: #001040 !important; }
 .row-total { background-color: #d92525 !important; color: #ffffff !important; font-weight: bold; }
 .row-total td { background-color: #d92525 !important; color: #ffffff !important; border-color: #b01010 !important; }
+
+/* MENGHILANGKAN LABEL BAWAAN STREAMLIT KARENA KITA PAKAI LABEL MANUAL */
+label[data-baseweb="radio"] { display: none; }
 </style>""",
     unsafe_allow_html=True,
 )
 
-# --- FUNGSI LAST UPDATED 100% AKURAT DARI GITHUB API ---
+# --- FUNGSI LAST UPDATED DARI GITHUB API ---
 @st.cache_data(ttl=300) # Refresh tiap 5 menit
 def get_github_last_updated():
     """Tarik waktu aktual BDB_AB4.parquet di-commit ke GitHub"""
@@ -109,7 +112,16 @@ def get_github_last_updated():
     except Exception:
         pass
     
-    # Fallback jika GitHub sedang error
+    # Fallback lokal jika API Error
+    bdb_candidates = ["BDB_AB4.parquet", "BDB AB4.parquet", "BDB_AB4.csv.gz", "BDB_AB4.csv", "BDB_AB4.xlsx"]
+    target_bdb = next((f for f in bdb_candidates if os.path.exists(f)), None)
+    if target_bdb:
+        mtime = os.path.getmtime(target_bdb)
+        dt_utc = datetime.fromtimestamp(mtime, tz=timezone.utc)
+        tz_wib = pytz.timezone('Asia/Jakarta')
+        dt_wib = dt_utc.astimezone(tz_wib)
+        return dt_wib.strftime("%d-%m-%Y %H:%M WIB")
+        
     return "Sedang memuat..."
 
 # --- TATA LETAK JUDUL & LAST UPDATED YANG RAPI ---
@@ -117,7 +129,7 @@ st.title("📊 Dashboard Cek Omset Toko")
 
 st.markdown(
     f"<div style='text-align: right; margin-top: -35px; margin-bottom: 20px; color: #4b5563; font-size: 15px;'>"
-    f"🕘 Last Updated: &nbsp;<span style='color: #2563eb; font-weight: bold;'>{get_github_last_updated()}</span>"
+    f"🕘 Last Updated BDB_AB4: &nbsp;<span style='color: #2563eb; font-weight: bold;'>{get_github_last_updated()}</span>"
     f"</div>", 
     unsafe_allow_html=True
 )
@@ -342,10 +354,12 @@ try:
         
     list_wilayah.insert(0, "SEMUA WILAYAH")
     
+    # MEMASUKKAN LABEL TEGAS SECARA MANUAL
+    st.markdown("<p style='font-size:16px; font-weight:600; margin-bottom:-10px; color:#1f2937;'>🌍 Filter By Wilayah</p>", unsafe_allow_html=True)
     selected_wilayah = st.selectbox(
-        "🌍 Filter By Wilayah", 
+        "", # Dikosongkan karena diganti teks manual
         options=list_wilayah,
-        help="Pilih wilayah (DKI/BANTEN/BODEBEK) untuk mengurangi daftar toko di bawah, sehingga ketikan tidak nge-lag."
+        label_visibility="collapsed"
     )
 
     if selected_wilayah != "SEMUA WILAYAH":
@@ -353,15 +367,20 @@ try:
     else:
         df_filtered = df
 
+    st.markdown("<br>", unsafe_allow_html=True)
+
     # === 2. FILTER BERJENJANG: TOKO ===
     toko_df = df_filtered[["search_code", "search_name"]].drop_duplicates()
     toko_options = (toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique()
 
+    # MEMASUKKAN LABEL TEGAS SECARA MANUAL
+    st.markdown("<p style='font-size:16px; font-weight:600; margin-bottom:-10px; color:#1f2937;'>🔍 Cari Toko</p>", unsafe_allow_html=True)
     selected_tokos = st.multiselect(
-        "🔍 Cari Toko", 
-        options=list(toko_options), 
+        "", # Dikosongkan karena diganti teks manual
+        options=list_toko_options, 
         max_selections=5,
         placeholder="Ketik Kode / Nama Toko (Atau Toko Grouping)...",
+        label_visibility="collapsed"
     )
 
     bln_list = ["JAN26", "FEB26", "MAR26", "APR26", "MEI26", "JUN26", "JUL26", "AGT26", "SEP26", "OKT26"]
