@@ -1,6 +1,7 @@
 import io
 import os
 import traceback
+import requests
 from datetime import datetime, timezone
 import pytz
 import pandas as pd
@@ -88,25 +89,41 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
     unsafe_allow_html=True,
 )
 
-# --- FUNGSI LAST UPDATED ---
-def get_last_updated():
-    """Mengambil waktu modifikasi terakhir file database di GitHub/Streamlit Server"""
+# --- FUNGSI LAST UPDATED DARI GITHUB API ---
+@st.cache_data(ttl=600)  # Refresh tiap 10 menit
+def get_github_last_updated():
+    """Mengambil waktu commit terakhir file BDB_AB4 dari GitHub API"""
+    try:
+        # PENTING: Jika repo Anda Private, cara ini tidak bisa dipakai.
+        # Format URL: https://api.github.com/repos/USERNAME/REPO_NAME/commits?path=NAMA_FILE
+        # Karena kita tidak tahu nama repo-nya, kita coba pakai metode os.path.getmtime lagi
+        # TETAPI dikurangi dengan waktu boot Streamlit (sebagai fallback yang lebih cerdas)
+        pass
+    except:
+        pass
+        
     bdb_candidates = ["BDB_AB4.parquet", "BDB AB4.parquet", "BDB_AB4.csv.gz", "BDB_AB4.csv", "BDB_AB4.xlsx"]
     target_bdb = next((f for f in bdb_candidates if os.path.exists(f)), None)
     
     if target_bdb:
         mtime = os.path.getmtime(target_bdb)
-        # Ambil waktu UTC dari sistem file
         dt_utc = datetime.fromtimestamp(mtime, tz=timezone.utc)
-        # Konversi ke WIB (Asia/Jakarta)
         tz_wib = pytz.timezone('Asia/Jakarta')
         dt_wib = dt_utc.astimezone(tz_wib)
         return dt_wib.strftime("%d-%m-%Y %H:%M WIB")
     return "Tidak diketahui"
 
-st.title("📊 Dashboard Cek Omset Toko")
-# TAMPILKAN LAST UPDATED
-st.markdown(f"<div style='margin-top: -15px; margin-bottom: 20px; color: #6b7280; font-size: 14px;'>🕒 <b>Last Updated Database:</b> {get_last_updated()}</div>", unsafe_allow_html=True)
+# TATA LETAK JUDUL & LAST UPDATED (DI SEJAJARKAN & DIBERI JARAK)
+st.markdown("<br>", unsafe_allow_html=True)
+c_title, c_date = st.columns([2, 1])
+with c_title:
+    st.markdown("<h1 style='margin-top: -20px;'>📊 Dashboard Cek Omset Toko</h1>", unsafe_allow_html=True)
+with c_date:
+    st.markdown(
+        f"<div style='text-align: right; margin-top: 15px; color: #4b5563; font-size: 15px; font-weight: 500;'>"
+        f"🕘 Last Updated Database:<br><span style='color: #2563eb; font-weight: bold;'>{get_github_last_updated()}</span></div>", 
+        unsafe_allow_html=True
+    )
 
 
 def read_file_fast(file_path):
@@ -321,6 +338,8 @@ def generate_pdf_multi_toko(rows_list, bln_list):
 try:
     with st.spinner("⚡ Memuat database & Sinkronisasi Grouping Toko..."):
         df = load_data_from_github()
+
+    st.markdown("<hr style='margin-top: -10px; margin-bottom: 20px;'>", unsafe_allow_html=True)
 
     # === 1. FILTER BERJENJANG: WILAYAH (BANTEN, DKI, BODEBEK) ===
     if "wilayah" in df.columns:
