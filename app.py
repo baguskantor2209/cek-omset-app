@@ -357,7 +357,7 @@ try:
     # MEMASUKKAN LABEL TEGAS SECARA MANUAL
     st.markdown("<p style='font-size:16px; font-weight:600; margin-bottom:-10px; color:#1f2937;'>🌍 Filter By Wilayah</p>", unsafe_allow_html=True)
     selected_wilayah = st.selectbox(
-        "", # Dikosongkan karena diganti teks manual
+        "", 
         options=list_wilayah,
         label_visibility="collapsed"
     )
@@ -376,8 +376,8 @@ try:
     # MEMASUKKAN LABEL TEGAS SECARA MANUAL
     st.markdown("<p style='font-size:16px; font-weight:600; margin-bottom:-10px; color:#1f2937;'>🔍 Cari Toko</p>", unsafe_allow_html=True)
     selected_tokos = st.multiselect(
-        "", # Dikosongkan karena diganti teks manual
-        options=list_toko_options, 
+        "", 
+        options=list(toko_options), 
         max_selections=5,
         placeholder="Ketik Kode / Nama Toko (Atau Toko Grouping)...",
         label_visibility="collapsed"
