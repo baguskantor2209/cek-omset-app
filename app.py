@@ -28,7 +28,32 @@ header { visibility: hidden !important; height: 0px !important; display: none !i
 #MainMenu { visibility: hidden !important; display: none !important; }
 .stAppToolbar { display: none !important; visibility: hidden !important; }
 footer { visibility: hidden !important; height: 0px !important; display: none !important; }
+.stDeployButton { display: none !important; }
+[data-testid="stDecoration"] { display: none !important; }
+[data-testid="stStatusWidget"] { visibility: hidden !important; display: none !important; }
+[data-testid="stViewerBadge"] { display: none !important; visibility: hidden !important; }
+
 .stApp { background-color: #f8f9fa; color: #111827; }
+
+/* WARNA TOMBOL DOWNLOAD PDF (SELALU BIRU TERANG & TEXT PUTIH) */
+[data-testid="stDownloadButton"] button {
+    background-color: #2563eb !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 12px 24px !important;
+    box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2) !important;
+    transition: all 0.3s ease !important;
+}
+[data-testid="stDownloadButton"] button:hover {
+    background-color: #1d4ed8 !important;
+}
+[data-testid="stDownloadButton"] button p {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+}
+
+/* Metric Cards */
 .metric-card {
     background-color: #ffffff; border-radius: 12px; padding: 16px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-left: 5px solid #2563eb; margin-bottom: 12px;
@@ -36,14 +61,21 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 .metric-title { color: #4b5563; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; }
 .metric-value { color: #1e3a8a; font-size: 1.5rem; font-weight: 800; margin: 4px 0; }
 .metric-subtitle { font-size: 0.85rem; font-weight: 600; }
+
+/* LEBAR KOLOM TABEL PROPORSIONAL AGAR RAPIH */
 .omset-table-container {
     background: #ffffff; padding: 16px; border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-top: 15px; margin-bottom: 25px; overflow-x: auto;
 }
-.report-table { width: 100%; min-width: 800px; border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; }
+.report-table { 
+    width: 100%; 
+    min-width: 1000px; 
+    table-layout: fixed; 
+    border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; 
+}
 .report-table th { background-color: #00c0f0; color: #000000; font-weight: 700; text-align: center; padding: 8px 4px; border: 1px solid #bce8f1; white-space: nowrap; }
 .report-table th.blue-header { background-color: #002060; color: #ffffff; }
-.report-table td { padding: 6px 8px; border: 1px solid #d1d5db; text-align: right; background-color: #ffffff; white-space: nowrap; }
+.report-table td { padding: 6px 8px; border: 1px solid #d1d5db; text-align: right; background-color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .report-table td.center { text-align: center; }
 .report-table td.left { text-align: left; font-weight: 600; }
 .row-category { background-color: #002060 !important; color: #ffffff !important; font-weight: bold; }
@@ -56,40 +88,62 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 
 st.title("📊 Dashboard Cek Omset Toko")
 
-# Helper Functions
-def clean_code(val):
-    if pd.isna(val):
-        return ""
-    return str(val).strip().upper()
 
 def read_file_fast(file_path):
     if file_path.endswith(".parquet"):
         return pd.read_parquet(file_path)
     elif file_path.endswith(".csv.gz") or file_path.endswith(".csv"):
-        return pd.read_csv(file_path, engine="python", on_bad_lines="skip")
+        return pd.read_csv(file_path, engine="python", on_bad_lines="skip", encoding='utf-8', sep=None)
     return pd.read_excel(file_path, engine="openpyxl")
 
-def read_excel_grouping_dp_only(file_path):
-    xls = pd.ExcelFile(file_path, engine="openpyxl")
-    sheet_target = next((s for s in xls.sheet_names if s.strip().upper() == "DP"), xls.sheet_names[0])
+
+def read_grouping_smart(file_path):
+    if file_path.endswith(".parquet"):
+        return pd.read_parquet(file_path)
+    elif file_path.endswith(".csv"):
+        return pd.read_csv(file_path, engine="python", on_bad_lines="skip")
     
-    df_sheet = pd.read_excel(xls, sheet_name=sheet_target, header=1)
-    df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
-    
-    if "Kode Customer" not in df_sheet.columns and "KDCUST" not in [c.upper() for c in df_sheet.columns]:
-        df_sheet = pd.read_excel(xls, sheet_name=sheet_target, header=0)
+    try:
+        xls = pd.ExcelFile(file_path, engine="openpyxl")
+        sheet_target = next((s for s in xls.sheet_names if s.strip().upper() == "DP"), xls.sheet_names[0])
+        
+        df_sheet = pd.read_excel(xls, sheet_name=sheet_target, header=1)
         df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
         
-    return df_sheet
+        if "Kode Customer" not in df_sheet.columns and "KDCUST" not in [c.upper() for c in df_sheet.columns]:
+            df_sheet = pd.read_excel(xls, sheet_name=sheet_target, header=0)
+            df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
+            
+        return df_sheet
+    except Exception:
+        return pd.read_excel(file_path)
+
+
+def map_wilayah(depo_str):
+    """Memetakan Depo ke Wilayah (BANTEN, DKI, BODEBEK) berdasarkan kode unik"""
+    val = str(depo_str).upper()
+    if pd.isna(depo_str) or val == "NAN" or val == "":
+        return "LAINNYA"
+        
+    banten_codes = ["0819", "0820", "0823", "0910", "0921", "0924"]
+    dki_codes = ["0107", "0116", "0117", "0118", "0203", "0204", "0208", "0209"]
+    bodebek_codes = ["0301", "0303", "0304", "0310", "0602", "0605", "0622"]
+    
+    if any(code in val for code in banten_codes): return "BANTEN"
+    if any(code in val for code in dki_codes): return "DKI"
+    if any(code in val for code in bodebek_codes): return "BODEBEK"
+    
+    return "LAINNYA"
+
 
 @st.cache_data
 def load_data_from_github():
-    # 1. BACA DATA PARQUET
-    bdb_candidates = ["BDB_AB4.parquet", "BDB AB4.parquet", "BDB_AB4.csv.gz", "BDB_AB4.xlsx"]
+    # 1. BACA DATA OMSET UTAMA
+    bdb_candidates = ["BDB_AB4.parquet", "BDB AB4.parquet", "BDB_AB4.csv.gz", "BDB_AB4.csv", "BDB_AB4.xlsx"]
     target_bdb = next((f for f in bdb_candidates if os.path.exists(f)), None)
 
     if not target_bdb:
-        raise FileNotFoundError("Data 'BDB_AB4.parquet' tidak ditemukan!")
+        raise FileNotFoundError("Data 'BDB_AB4' tidak ditemukan!")
 
     df_bdb = read_file_fast(target_bdb)
     df_bdb.columns = [str(c).strip() for c in df_bdb.columns]
@@ -97,16 +151,24 @@ def load_data_from_github():
     kd_cust_col = next((c for c in df_bdb.columns if c.lower() in ["kdcust", "kode customer", "kode_customer"]), "kdCust")
     cust_name_col = next((c for c in df_bdb.columns if c.lower() in ["cust", "nama customer", "nama toko"]), "cust")
     
+    # Vectorized string cleaning
     df_bdb["kdCust_orig"] = df_bdb[kd_cust_col].astype(str).str.strip().str.upper()
-    df_bdb["kdCust_clean"] = df_bdb["kdCust_orig"].apply(clean_code)
+    df_bdb["kdCust_clean"] = df_bdb["kdCust_orig"].str.replace("-", "", regex=False).str.replace(" ", "", regex=False).str.replace(".", "", regex=False)
     df_bdb["cust"] = df_bdb[cust_name_col].astype(str).str.strip()
+    
+    # Deteksi dan Petakan Wilayah
+    if "depo" in df_bdb.columns:
+        df_bdb["depo"] = df_bdb["depo"].astype(str).str.strip()
+        df_bdb["wilayah"] = df_bdb["depo"].apply(map_wilayah)
+    else:
+        df_bdb["wilayah"] = "LAINNYA"
 
-    # 2. BACA DATA GROUPING (EXCEL)
-    group_candidates = ["Grouping_Toko.xlsx", "Grouping Toko.xlsx", "List_Grouping.xlsx"]
+    # 2. BACA DATA GROUPING (Dinamis: CSV / Parquet / Excel)
+    group_candidates = ["Grouping_Toko.parquet", "Grouping_Toko.csv", "Grouping_Toko.xlsx", "Grouping Toko.xlsx"]
     target_group = next((f for f in group_candidates if os.path.exists(f)), None)
 
     if target_group:
-        df_group = read_excel_grouping_dp_only(target_group)
+        df_group = read_grouping_smart(target_group)
         col_lookup = {str(c).lower().replace("_", " ").strip(): c for c in df_group.columns}
         
         col_kd_cust = col_lookup.get("kode customer") or col_lookup.get("kdcust")
@@ -114,8 +176,8 @@ def load_data_from_github():
         col_nm_pemilik = col_lookup.get("nama tk pemilik") or col_lookup.get("namatkpemilik")
 
         if col_kd_cust and col_kd_pemilik and col_nm_pemilik:
-            df_group["clean_kd_cust"] = df_group[col_kd_cust].apply(clean_code)
-            df_group["clean_kd_pemilik"] = df_group[col_kd_pemilik].apply(clean_code)
+            df_group["clean_kd_cust"] = df_group[col_kd_cust].astype(str).str.strip().str.upper().str.replace("-", "", regex=False).str.replace(" ", "", regex=False).str.replace(".", "", regex=False)
+            df_group["clean_kd_pemilik"] = df_group[col_kd_pemilik].astype(str).str.strip().str.upper().str.replace("-", "", regex=False).str.replace(" ", "", regex=False).str.replace(".", "", regex=False)
             df_group["clean_nm_pemilik"] = df_group[col_nm_pemilik].astype(str).str.strip()
 
             map_pemilik_code = df_group.set_index("clean_kd_cust")["clean_kd_pemilik"].to_dict()
@@ -235,16 +297,40 @@ def generate_pdf_multi_toko(rows_list, bln_list):
     buffer.seek(0)
     return buffer
 
-# --- MAIN APP EXECUTION DENGAN ERROR TRACKER ---
+# --- MAIN APP EXECUTION ---
 try:
     with st.spinner("⚡ Memuat database & Sinkronisasi Grouping Toko..."):
         df = load_data_from_github()
 
-    toko_df = df[["search_code", "search_name"]].drop_duplicates()
+    # === 1. FILTER BERJENJANG: WILAYAH (BANTEN, DKI, BODEBEK) ===
+    if "wilayah" in df.columns:
+        list_wilayah = sorted([w for w in df["wilayah"].unique() if w != "LAINNYA"])
+        if "LAINNYA" in df["wilayah"].unique():
+            list_wilayah.append("LAINNYA")
+    else:
+        list_wilayah = []
+        
+    list_wilayah.insert(0, "SEMUA WILAYAH")
+    
+    selected_wilayah = st.selectbox(
+        "🌍 1. PILIH WILAYAH (Mempercepat Pencarian):", 
+        options=list_wilayah,
+        help="Pilih wilayah (DKI/BANTEN/BODEBEK) untuk mengurangi daftar toko di bawah, sehingga ketikan tidak nge-lag."
+    )
+
+    if selected_wilayah != "SEMUA WILAYAH":
+        df_filtered = df[df["wilayah"] == selected_wilayah]
+    else:
+        df_filtered = df
+
+    # === 2. FILTER BERJENJANG: TOKO ===
+    toko_df = df_filtered[["search_code", "search_name"]].drop_duplicates()
     toko_options = (toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique()
 
     selected_tokos = st.multiselect(
-        "🔍 CARI & PILIH TOKO (MAKSIMAL 5 TOKO):", options=list(toko_options), max_selections=5,
+        "🔍 2. CARI & PILIH TOKO (MAKSIMAL 5 TOKO):", 
+        options=list(toko_options), 
+        max_selections=5,
         placeholder="Ketik Kode / Nama Toko (Atau Toko Grouping)...",
     )
 
@@ -258,11 +344,22 @@ try:
             row = aggregate_store_rows(sub_df, bln_list)
             selected_rows.append(row)
 
+            # METRIK 1: vs RT2 25
             omset_okt26, rt225_ab4 = row.get("OKT26_AB4", 0), row.get("RT225_AB4", 0)
             diff_omset = omset_okt26 - rt225_ab4
             pct_omset = (diff_omset / rt225_ab4 * 100) if rt225_ab4 and rt225_ab4 > 0 else 0
             status_arrow, status_color = ("▲", "#10b981") if diff_omset >= 0 else ("▼", "#ef4444")
 
+            # METRIK 2: vs SM1 26 (Rata Rata JAN - JUN)
+            jan_jun_cols = ["JAN26_AB4", "FEB26_AB4", "MAR26_AB4", "APR26_AB4", "MEI26_AB4", "JUN26_AB4"]
+            sm1_26_total = sum(float(row.get(m, 0) or 0) for m in jan_jun_cols)
+            sm1_26_avg = sm1_26_total / 6.0
+            
+            diff_sm1 = omset_okt26 - sm1_26_avg
+            pct_sm1 = (diff_sm1 / sm1_26_avg * 100) if sm1_26_avg > 0 else 0
+            status_arrow_sm1, status_color_sm1 = ("▲", "#10b981") if diff_sm1 >= 0 else ("▼", "#ef4444")
+
+            # Hitung Omset Terbesar
             max_val, max_month_code = -1.0, "OKT26"
             for b in bln_list:
                 val = float(row.get(f"{b}_AB4", 0) or 0)
@@ -270,7 +367,17 @@ try:
 
             c1, c2 = st.columns([1, 1])
             with c1:
-                st.markdown(f"""<div class="metric-card"><div class="metric-title">REAL OMSET OKT 26 DIVISI AB4</div><div class="metric-value">Rp {omset_okt26:,.1f} Jt</div><div class="metric-subtitle" style="color: {status_color};">{status_arrow} {abs(pct_omset):,.1f}% vs RT2 25 ({diff_omset:+,.1f} Jt)</div></div>""", unsafe_allow_html=True)
+                st.markdown(f"""
+<div class="metric-card" style="border-left-color: #2563eb;">
+    <div class="metric-title">REAL OMSET OKT 26 DIVISI AB4</div>
+    <div class="metric-value">Rp {omset_okt26:,.1f} Jt</div>
+    <div class="metric-subtitle" style="color: {status_color};">
+        {status_arrow} {abs(pct_omset):,.1f}% vs RT2 25 ({diff_omset:+,.1f} Jt)
+    </div>
+    <div class="metric-subtitle" style="color: {status_color_sm1}; margin-top: 5px;">
+        {status_arrow_sm1} {abs(pct_sm1):,.1f}% vs SM1 26 ({diff_sm1:+,.1f} Jt)
+    </div>
+</div>""", unsafe_allow_html=True)
             with c2:
                 st.markdown(f"""<div class="metric-card" style="border-left-color: #06b6d4;"><div class="metric-title">OMSET TERBESAR DIVISI AB4</div><div class="metric-value" style="font-size: 1.25rem;">Puncak Omset Pada Bulan <b>{format_month_label(max_month_code)}</b></div><div class="metric-subtitle" style="color: #06b6d4;">Dengan Jumlah Omset Rp {max_val:,.1f} Jt</div></div>""", unsafe_allow_html=True)
 
@@ -309,7 +416,6 @@ try:
         st.info("💡 Silakan ketik atau pilih toko pada pencarian di atas.")
 
 except Exception as e:
-    # Error Tracker, agar tidak muncul layar putih 'Oh no' lagi
     st.error("🚨 TERJADI KESALAHAN PADA APLIKASI:")
     st.code(traceback.format_exc(), language="bash")
-    st.warning("☝️ Silakan screenshot kotak merah di atas dan kirimkan agar bisa diperbaiki persis di titik kerusakannya.")
+    st.warning("☝️️ Silakan screenshot kotak merah di atas dan kirimkan agar bisa diperbaiki persis di titik kerusakannya.")
