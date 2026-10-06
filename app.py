@@ -313,7 +313,7 @@ try:
     list_wilayah.insert(0, "SEMUA WILAYAH")
     
     selected_wilayah = st.selectbox(
-        "🌍 1. PILIH WILAYAH (Mempercepat Pencarian):", 
+        "🌍 Filter By Wilayah", 
         options=list_wilayah,
         help="Pilih wilayah (DKI/BANTEN/BODEBEK) untuk mengurangi daftar toko di bawah, sehingga ketikan tidak nge-lag."
     )
@@ -328,7 +328,7 @@ try:
     toko_options = (toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique()
 
     selected_tokos = st.multiselect(
-        "🔍 2. CARI & PILIH TOKO (MAKSIMAL 5 TOKO):", 
+        "🔍 Cari Toko", 
         options=list(toko_options), 
         max_selections=5,
         placeholder="Ketik Kode / Nama Toko (Atau Toko Grouping)...",
@@ -418,4 +418,4 @@ try:
 except Exception as e:
     st.error("🚨 TERJADI KESALAHAN PADA APLIKASI:")
     st.code(traceback.format_exc(), language="bash")
-    st.warning("☝️️ Silakan screenshot kotak merah di atas dan kirimkan agar bisa diperbaiki persis di titik kerusakannya.")
+    st.warning("☝ Silakan screenshot kotak merah di atas dan kirimkan agar bisa diperbaiki persis di titik kerusakannya.")
