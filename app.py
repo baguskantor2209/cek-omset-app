@@ -92,14 +92,14 @@ label[data-baseweb="radio"] { display: none; }
     unsafe_allow_html=True,
 )
 
-# --- ASSISTIVE TOUCH (iPHONE STYLE) ---
+# --- ASSISTIVE TOUCH (iPHONE STYLE - DRAGGABLE & BLUE GRADIENT) ---
 assistive_touch_html = """
 <style>
 /* Kontainer AssistiveTouch */
-.assistive-touch-container {
+#assistive-touch-container {
     position: fixed;
     bottom: 35px;
-    right: 35px;
+    left: 35px; /* Pindah ke kiri bawah */
     z-index: 999999;
     font-family: 'Segoe UI', Arial, sans-serif;
 }
@@ -109,30 +109,32 @@ assistive_touch_html = """
     display: none;
 }
 
-/* Tombol bulat ala iPhone */
+/* Tombol bulat ala iPhone - Gradasi Biru Muda */
 .at-button {
     width: 60px;
     height: 60px;
-    background: rgba(40, 40, 40, 0.85);
-    border-radius: 20px; /* Bisa diganti 50% jika ingin bulat sempurna */
+    background: linear-gradient(135deg, #40c9ff 0%, #1890ff 100%); /* Warna Gradasi Biru Muda */
+    border-radius: 50%; /* Bulat Sempurna */
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.4);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.2);
-    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+    cursor: grab;
+    box-shadow: 0 8px 25px rgba(24, 144, 255, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    transition: transform 0.2s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+
+.at-button:active {
+    cursor: grabbing;
 }
 
 /* Lingkaran dalam AssistiveTouch */
 .at-button::after {
     content: "";
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
-    border: 3.5px solid rgba(255,255,255,0.8);
+    border: 2.5px solid rgba(255, 255, 255, 0.9);
     box-sizing: border-box;
     transition: all 0.3s;
 }
@@ -141,7 +143,7 @@ assistive_touch_html = """
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.8);
+    background: rgba(255, 255, 255, 0.9);
     position: absolute;
     transition: all 0.3s;
 }
@@ -150,7 +152,7 @@ assistive_touch_html = """
 .at-menu {
     position: absolute;
     bottom: 75px;
-    right: 0;
+    left: 0; /* Menu melebar ke kanan dari titik awal di kiri */
     background: rgba(255, 255, 255, 0.95);
     border-radius: 16px;
     padding: 10px;
@@ -161,7 +163,7 @@ assistive_touch_html = """
     opacity: 0;
     visibility: hidden;
     transform: scale(0.8) translateY(20px);
-    transform-origin: bottom right;
+    transform-origin: bottom left; /* Titik animasi dari kiri bawah */
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     box-shadow: 0 10px 30px rgba(0,0,0,0.15);
     backdrop-filter: blur(15px);
@@ -169,15 +171,15 @@ assistive_touch_html = """
     border: 1px solid rgba(0,0,0,0.1);
 }
 
-/* Animasi ketika AssistiveTouch diklik */
+/* Animasi ketika AssistiveTouch diklik (Menu Terbuka) */
 .at-checkbox:checked ~ .at-menu {
     opacity: 1;
     visibility: visible;
     transform: scale(1) translateY(0);
 }
 .at-checkbox:checked ~ .at-button {
-    background: rgba(20, 20, 20, 0.95);
     transform: scale(0.95);
+    box-shadow: 0 4px 15px rgba(24, 144, 255, 0.2);
 }
 .at-checkbox:checked ~ .at-button::after, 
 .at-checkbox:checked ~ .at-button::before {
@@ -200,26 +202,31 @@ assistive_touch_html = """
     border: 1px solid #f3f4f6;
     box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
-
 .at-item:hover {
-    background: #f8fafc;
+    background: #f0f9ff;
     transform: scale(1.02);
-    color: #2563eb !important;
-    border-color: #bfdbfe;
+    color: #0ea5e9 !important;
+    border-color: #bae6fd;
 }
 </style>
 
-<div class="assistive-touch-container">
+<div id="assistive-touch-container">
     <input type="checkbox" id="at-toggle" class="at-checkbox">
     <div class="at-menu">
-        <!-- Link otomatis scroll ke atas / ke Dashboard -->
+        <!-- Link otomatis scroll ke dashboard -->
         <a href="#dashboard-cek-omset-toko" class="at-item">📊 Cek Omset Toko</a>
-        <!-- Nanti form lainnya bisa ditambahkan di bawah ini -->
+        <!-- Nanti form lainnya bisa tambah di sini -->
     </div>
-    <label for="at-toggle" class="at-button"></label>
+    <label for="at-toggle" id="at-btn-label" class="at-button"></label>
 </div>
-"""
-st.markdown(assistive_touch_html, unsafe_allow_html=True)
+
+<script>
+// Skrip JavaScript untuk membuat tombol bisa di Drag & Drop
+(function() {
+    var checkExist = setInterval(function() {
+        var atContainer = document.getElementById('assistive-touch-container');
+        if (atContainer) {
+
 # ----------------------------------------
 
 # --- FUNGSI LAST UPDATED DARI GITHUB API ---
