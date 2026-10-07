@@ -3,9 +3,11 @@ import os
 import math
 import traceback
 import requests
+import gc
 from datetime import datetime, timezone
 import pytz
 import pandas as pd
+import numpy as np
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -22,9 +24,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-st.set_page_config(
-    page_title="Bagus SDA AB4", layout="wide", page_icon="📊"
-)
+st.set_page_config(page_title="Bagus SDA AB4", layout="wide", page_icon="📊")
 
 # Custom CSS + RESPONSIVE MEDIA QUERIES
 st.markdown(
@@ -98,9 +98,7 @@ label[data-baseweb="radio"] { display: none; }
     .at-menu { left: 0; bottom: 60px !important; width: 200px !important; }
     .at-item { padding: 10px 14px !important; font-size: 13px !important; }
 }
-</style>""",
-    unsafe_allow_html=True,
-)
+</style>""", unsafe_allow_html=True)
 
 # --- ASSISTIVE TOUCH ---
 assistive_touch_html = """
@@ -131,7 +129,6 @@ assistive_touch_html = """
 }
 .at-item:hover { background: #f8fafc; transform: scale(1.02); color: #2563eb !important; border-color: #bfdbfe; }
 </style>
-
 <div class="assistive-touch-container" id="at-container">
     <input type="checkbox" id="at-toggle" class="at-checkbox">
     <div class="at-menu">
@@ -177,8 +174,8 @@ draggable_js = """<script>
 </script>"""
 components.html(draggable_js, height=0, width=0)
 
-# --- FUNGSI LOAD DATA YANG AMAN (TIDAK MEMBUAT OOM) ---
-@st.cache_data(ttl=300) 
+# --- ENGINE LOAD DATA SUPER RINGAN ---
+@st.cache_data(ttl=300, show_spinner=False) 
 def get_github_last_updated():
     url = "https://api.github.com/repos/baguskantor2209/cek-omset-app/commits?path=BDB_AB4.parquet&page=1&per_page=1"
     try:
@@ -200,26 +197,6 @@ def get_github_last_updated():
         return dt_utc.astimezone(pytz.timezone('Asia/Jakarta')).strftime("%d-%m-%Y %H:%M WIB")
     return "Sedang memuat..."
 
-def read_file_fast(file_path):
-    if file_path.endswith(".parquet"): return pd.read_parquet(file_path)
-    elif file_path.endswith(".csv.gz") or file_path.endswith(".csv"): return pd.read_csv(file_path, engine="python", on_bad_lines="skip", encoding='utf-8', sep=None)
-    return pd.read_excel(file_path, engine="openpyxl")
-
-def read_grouping_smart(file_path):
-    if file_path.endswith(".parquet"): return pd.read_parquet(file_path)
-    elif file_path.endswith(".csv"): return pd.read_csv(file_path, engine="python", on_bad_lines="skip")
-    try:
-        xls = pd.ExcelFile(file_path, engine="openpyxl")
-        sheet_target = next((s for s in xls.sheet_names if s.strip().upper() == "DP"), xls.sheet_names[0])
-        df_sheet = pd.read_excel(xls, sheet_name=sheet_target, header=1)
-        df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
-        if "Kode Customer" not in df_sheet.columns and "KDCUST" not in [c.upper() for c in df_sheet.columns]:
-            df_sheet = pd.read_excel(xls, sheet_name=sheet_target, header=0)
-            df_sheet.columns = [str(c).strip() for c in df_sheet.columns]
-        return df_sheet
-    except Exception:
-        return pd.read_excel(file_path)
-
 def map_wilayah(depo_str):
     val = str(depo_str).upper()
     if pd.isna(depo_str) or val == "NAN" or val == "": return "LAINNYA"
@@ -231,20 +208,24 @@ def map_wilayah(depo_str):
     if any(code in val for code in bodebek_codes): return "BODEBEK"
     return "LAINNYA"
 
-@st.cache_data(ttl=300)
+@st.cache_data(show_spinner=False)
 def load_data_from_github():
     bdb_candidates = ["BDB_AB4.parquet", "BDB AB4.parquet", "BDB_AB4.csv.gz", "BDB_AB4.csv", "BDB_AB4.xlsx"]
     target_bdb = next((f for f in bdb_candidates if os.path.exists(f)), None)
     if not target_bdb: raise FileNotFoundError("Data 'BDB_AB4' tidak ditemukan!")
     
-    df_bdb = read_file_fast(target_bdb)
+    # Membaca data dengan mode sangat ringan
+    if target_bdb.endswith(".parquet"): df_bdb = pd.read_parquet(target_bdb)
+    elif target_bdb.endswith(".csv") or target_bdb.endswith(".csv.gz"): df_bdb = pd.read_csv(target_bdb, engine="python", on_bad_lines="skip")
+    else: df_bdb = pd.read_excel(target_bdb, engine="openpyxl")
+
     df_bdb.columns = [str(c).strip() for c in df_bdb.columns]
     
     kd_cust_col = next((c for c in df_bdb.columns if c.lower() in ["kdcust", "kode customer", "kode_customer"]), "kdCust")
     cust_name_col = next((c for c in df_bdb.columns if c.lower() in ["cust", "nama customer", "nama toko"]), "cust")
     
     df_bdb["kdCust_orig"] = df_bdb[kd_cust_col].astype(str).str.strip().str.upper()
-    df_bdb["kdCust_clean"] = df_bdb["kdCust_orig"].str.replace("-", "", regex=False).str.replace(" ", "", regex=False).str.replace(".", "", regex=False)
+    df_bdb["kdCust_clean"] = df_bdb["kdCust_orig"].str.replace(r'[- .]', '', regex=True)
     df_bdb["cust"] = df_bdb[cust_name_col].astype(str).str.strip()
     
     if "depo" in df_bdb.columns:
@@ -253,27 +234,41 @@ def load_data_from_github():
     else:
         df_bdb["wilayah"] = "LAINNYA"
 
+    df_bdb["wilayah"] = df_bdb["wilayah"].astype("category")
+    df_bdb["depo"] = df_bdb["depo"].astype("category")
+
+    # LOGIKA GROUPING
     group_candidates = ["Grouping_Toko.parquet", "Grouping_Toko.csv", "Grouping_Toko.xlsx", "Grouping Toko.xlsx"]
     target_group = next((f for f in group_candidates if os.path.exists(f)), None)
 
     if target_group:
-        df_group = read_grouping_smart(target_group)
+        if target_group.endswith(".parquet"): df_group = pd.read_parquet(target_group)
+        elif target_group.endswith(".csv"): df_group = pd.read_csv(target_group, engine="python", on_bad_lines="skip")
+        else:
+            xls = pd.ExcelFile(target_group, engine="openpyxl")
+            st_name = next((s for s in xls.sheet_names if s.strip().upper() == "DP"), xls.sheet_names[0])
+            df_group = pd.read_excel(xls, sheet_name=st_name, header=1)
+            if "Kode Customer" not in df_group.columns and "KDCUST" not in [str(c).upper() for c in df_group.columns]:
+                df_group = pd.read_excel(xls, sheet_name=st_name, header=0)
+
+        df_group.columns = [str(c).strip() for c in df_group.columns]
         col_lookup = {str(c).lower().replace("_", " ").strip(): c for c in df_group.columns}
-        col_kd_cust = col_lookup.get("kode customer") or col_lookup.get("kdcust")
-        col_kd_pemilik = col_lookup.get("kd tk pemilik") or col_lookup.get("kdtkpemilik")
-        col_nm_pemilik = col_lookup.get("nama tk pemilik") or col_lookup.get("namatkpemilik")
+        c_kdcust = col_lookup.get("kode customer") or col_lookup.get("kdcust")
+        c_kdpem = col_lookup.get("kd tk pemilik") or col_lookup.get("kdtkpemilik")
+        c_nmpem = col_lookup.get("nama tk pemilik") or col_lookup.get("namatkpemilik")
 
-        if col_kd_cust and col_kd_pemilik and col_nm_pemilik:
-            df_group["clean_kd_cust"] = df_group[col_kd_cust].astype(str).str.strip().str.upper().str.replace("-", "", regex=False).str.replace(" ", "", regex=False).str.replace(".", "", regex=False)
-            df_group["clean_kd_pemilik"] = df_group[col_kd_pemilik].astype(str).str.strip().str.upper().str.replace("-", "", regex=False).str.replace(" ", "", regex=False).str.replace(".", "", regex=False)
-            df_group["clean_nm_pemilik"] = df_group[col_nm_pemilik].astype(str).str.strip()
+        if c_kdcust and c_kdpem and c_nmpem:
+            cl_cust = df_group[c_kdcust].astype(str).str.strip().str.upper().str.replace(r'[- .]', '', regex=True)
+            cl_pem = df_group[c_kdpem].astype(str).str.strip().str.upper().str.replace(r'[- .]', '', regex=True)
+            cl_nm = df_group[c_nmpem].astype(str).str.strip()
 
-            map_pemilik_code = df_group.set_index("clean_kd_cust")["clean_kd_pemilik"].to_dict()
-            map_pemilik_name = df_group.set_index("clean_kd_cust")["clean_nm_pemilik"].to_dict()
+            map_pem_code = dict(zip(cl_cust, cl_pem))
+            map_pem_name = dict(zip(cl_cust, cl_nm))
 
-            df_bdb["Kd_Pemilik"] = df_bdb["kdCust_clean"].map(map_pemilik_code).fillna(df_bdb["kdCust_clean"])
-            df_bdb["Nama_Pemilik"] = df_bdb["kdCust_clean"].map(map_pemilik_name).fillna(df_bdb["cust"])
-            df_bdb["Is_Group"] = df_bdb["kdCust_clean"].isin(map_pemilik_code)
+            df_bdb["Kd_Pemilik"] = df_bdb["kdCust_clean"].map(map_pem_code).fillna(df_bdb["kdCust_clean"])
+            df_bdb["Nama_Pemilik"] = df_bdb["kdCust_clean"].map(map_pem_name).fillna(df_bdb["cust"])
+            df_bdb["Is_Group"] = df_bdb["kdCust_clean"].isin(map_pem_code)
+            del df_group
         else:
             df_bdb["Kd_Pemilik"], df_bdb["Nama_Pemilik"], df_bdb["Is_Group"] = df_bdb["kdCust_clean"], df_bdb["cust"], False
     else:
@@ -282,28 +277,41 @@ def load_data_from_github():
     df_bdb["search_code"] = df_bdb["Kd_Pemilik"]
     df_bdb["search_name"] = df_bdb.apply(lambda r: f"{r['Nama_Pemilik']} ( Grouping )" if r["Is_Group"] else r["cust"], axis=1)
     
+    gc.collect() # Bersihkan RAM setelah loading selesai
     return df_bdb
 
-def f_num(val): return f"{val:,.0f}" if val and val != 0 else "-"
-def f_dec(val): return f"{val:,.1f}" if val and val != 0 else "-"
+# --- FUNGSI FORMATTER ---
+def f_num(val):
+    try:
+        v = float(val)
+        return "-" if math.isnan(v) or v == 0 else f"{v:,.0f}"
+    except: return "-"
+
+def f_dec(val):
+    try:
+        v = float(val)
+        return "-" if math.isnan(v) or v == 0 else f"{v:,.1f}"
+    except: return "-"
+
 def format_month_label(bln_code):
     months_map = { "JAN": "Januari", "FEB": "Februari", "MAR": "Maret", "APR": "April", "MEI": "Mei", "JUN": "Juni", "JUL": "Juli", "AGT": "Agustus", "SEP": "September", "OKT": "Oktober"}
     prefix = str(bln_code)[:3].upper()
     return f"{months_map.get(prefix, prefix)} 2026" if "26" in str(bln_code) else months_map.get(prefix, prefix)
 
-def aggregate_store_rows(sub_df, bln_list):
+# --- FUNGSI AGREGASI AMAN ---
+def aggregate_store_rows(sub_df):
     first_row = sub_df.iloc[0].copy()
-    if len(sub_df) == 1: return first_row
+    if len(sub_df) == 1:
+        first_row["cust"] = f"{first_row['Nama_Pemilik']} ( Grouping ) [1 Toko Cabang]"
+        return first_row
     
     numeric_suffixes = ["TOR", "UCV", "KTD", "RBL", "UCW", "ISO", "EDV", "CZLSN", "CZKRT", "R3", "R06EXC", "ALK", "ALKREG", "ALKNONREG", "MAA", "HC", "AB4"]
-    for suf in numeric_suffixes:
-        if f"RT225_{suf}" in sub_df: first_row[f"RT225_{suf}"] = sub_df[f"RT225_{suf}"].apply(pd.to_numeric, errors="coerce").sum()
-        if f"SM225_{suf}" in sub_df: first_row[f"SM225_{suf}"] = sub_df[f"SM225_{suf}"].apply(pd.to_numeric, errors="coerce").sum()
-    for b in bln_list:
-        for suf in numeric_suffixes:
-            if f"{b}_{suf}" in sub_df:
-                first_row[f"{b}_{suf}"] = sub_df[f"{b}_{suf}"].apply(pd.to_numeric, errors="coerce").sum()
-                
+    num_cols = [c for c in sub_df.columns if any(c.endswith(f"_{suf}") for suf in numeric_suffixes)]
+    
+    if num_cols:
+        sums = sub_df[num_cols].apply(pd.to_numeric, errors='coerce').sum()
+        for c in num_cols: first_row[c] = sums[c]
+        
     first_row["cust"] = f"{first_row['Nama_Pemilik']} ( Grouping ) [{len(sub_df)} Toko Cabang]"
     return first_row
 
@@ -380,7 +388,6 @@ if page == "cek_omset":
     # HALAMAN 1: DASHBOARD CEK OMSET TOKO
     # ----------------------------------------------------
     try:
-        # PENGGUNAAN HEADER RESPONSIVE DENGAN FLEXBOX
         st.markdown(f"""
         <div class="header-container" style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 20px;">
             <h1 class="custom-title" style="margin: 0; padding: 0; font-size: 2.2rem; color: #111827;">📊 Dashboard Cek Omset Toko</h1>
@@ -394,8 +401,8 @@ if page == "cek_omset":
             df = load_data_from_github()
 
         if "wilayah" in df.columns:
-            list_wilayah = sorted([w for w in df["wilayah"].unique() if w != "LAINNYA"])
-            if "LAINNYA" in df["wilayah"].unique(): list_wilayah.append("LAINNYA")
+            list_wilayah = sorted([str(w) for w in df["wilayah"].unique() if str(w) != "LAINNYA"])
+            if "LAINNYA" in [str(w) for w in df["wilayah"].unique()]: list_wilayah.append("LAINNYA")
         else: list_wilayah = []
             
         list_wilayah.insert(0, "SEMUA WILAYAH")
@@ -422,12 +429,13 @@ if page == "cek_omset":
                 selected_code = selected_toko.split(" - ")[0].strip().upper()
                 sub_df = df[df["search_code"].astype(str).str.strip().str.upper() == selected_code]
                 
-                row = aggregate_store_rows(sub_df, bln_list)
+                row = aggregate_store_rows(sub_df)
                 selected_rows.append(row)
 
-                omset_okt26, rt225_ab4 = row.get("OKT26_AB4", 0), row.get("RT225_AB4", 0)
+                omset_okt26 = float(row.get("OKT26_AB4", 0) or 0)
+                rt225_ab4 = float(row.get("RT225_AB4", 0) or 0)
                 diff_omset = omset_okt26 - rt225_ab4
-                pct_omset = (diff_omset / rt225_ab4 * 100) if rt225_ab4 and rt225_ab4 > 0 else 0
+                pct_omset = (diff_omset / rt225_ab4 * 100) if rt225_ab4 > 0 else 0
                 status_arrow, status_color = ("▲", "#10b981") if diff_omset >= 0 else ("▼", "#ef4444")
 
                 jan_jun_cols = ["JAN26_AB4", "FEB26_AB4", "MAR26_AB4", "APR26_AB4", "MEI26_AB4", "JUN26_AB4"]
@@ -472,8 +480,6 @@ elif page == "lintas_divisi":
     # ----------------------------------------------------
     # HALAMAN 2: TOKO LINTAS DIVISI
     # ----------------------------------------------------
-    
-    # PENGGUNAAN HEADER RESPONSIVE DENGAN FLEXBOX
     st.markdown("""
     <div class="header-container" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 20px;">
         <h1 class="custom-title" style="margin: 0; padding: 0; font-size: 2.2rem; color: #111827;">🔄 Toko Lintas Divisi Belum Transaksi AB4</h1>
@@ -485,13 +491,12 @@ elif page == "lintas_divisi":
 
     list_wilayah = ["SEMUA WILAYAH"]
     if "wilayah" in df.columns:
-        w_opts = sorted([w for w in df["wilayah"].unique() if w != "LAINNYA"])
+        w_opts = sorted([str(w) for w in df["wilayah"].unique() if str(w) != "LAINNYA"])
         list_wilayah.extend(w_opts)
-        if "LAINNYA" in df["wilayah"].unique(): list_wilayah.append("LAINNYA")
+        if "LAINNYA" in [str(w) for w in df["wilayah"].unique()]: list_wilayah.append("LAINNYA")
 
     def reset_page_lintas(): st.session_state.page_lintas = 1
 
-    # --- PENAMBAHAN LABEL CUSTOM UNTUK FILTER ---
     c1, c2, c3 = st.columns(3)
     with c1: 
         st.markdown("<div class='filter-label' style='font-size:15px; font-weight:700; color:#1f2937; margin-bottom:4px;'>🌍 Wilayah</div>", unsafe_allow_html=True)
@@ -505,65 +510,75 @@ elif page == "lintas_divisi":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- LOGIKA FILTERING BEBAS MEMORI (TANPA MENG-COPY DATAFRAME) ---
-    mask = pd.Series(True, index=df.index)
-    
+    # --- ZERO-COPY MEMORY ENGINE (DIJAMIN TIDAK OOM) ---
+    mask = np.ones(len(df), dtype=bool)
+
     if sel_wilayah != "SEMUA WILAYAH": 
-        mask &= (df['wilayah'] == sel_wilayah)
+        mask &= (df['wilayah'] == sel_wilayah).to_numpy()
 
-    # Fungsi penarik kolom dengan aman
-    def get_col_safe(col_name):
+    # Fungsi penarik array yang aman dan super hemat memori
+    def get_num_arr(col_name):
         if col_name in df.columns:
-            return pd.to_numeric(df[col_name], errors='coerce').fillna(0)
-        return pd.Series(0.0, index=df.index)
+            return pd.to_numeric(df[col_name], errors='coerce').fillna(0.0).to_numpy()
+        return np.zeros(len(df))
 
-    jul_ab4 = get_col_safe('JUL26_AB4')
-    agt_ab4 = get_col_safe('AGT26_AB4')
-    sep_ab4 = get_col_safe('SEP26_AB4')
-
-    # Syarat Mutlak: Belum transaksi AB4
+    # Syarat: Belum Transaksi AB4 (Jul-Sep = 0)
+    jul_ab4 = get_num_arr('JUL26_AB4')
+    agt_ab4 = get_num_arr('AGT26_AB4')
+    sep_ab4 = get_num_arr('SEP26_AB4')
+    
     mask &= (jul_ab4 == 0) & (agt_ab4 == 0) & (sep_ab4 == 0)
 
-    # Hitung Omset
-    jul_div = get_col_safe(f'JUL26_{sel_divisi}')
-    agt_div = get_col_safe(f'AGT26_{sel_divisi}')
-    sep_div = get_col_safe(f'SEP26_{sel_divisi}')
+    # Kalkulasi Max Omset Lintas Divisi 
+    jul_div = get_num_arr(f'JUL26_{sel_divisi}')
+    agt_div = get_num_arr(f'AGT26_{sel_divisi}')
+    sep_div = get_num_arr(f'SEP26_{sel_divisi}')
     
-    max_omset = pd.concat([jul_div, agt_div, sep_div], axis=1).max(axis=1)
+    max_omset = np.maximum(np.maximum(jul_div, agt_div), sep_div)
 
+    # Filter Strata
     if sel_omset == "1JT UP": mask &= (max_omset >= 1.0)
     elif sel_omset == "5JT UP": mask &= (max_omset >= 5.0)
     elif sel_omset == "10JT UP": mask &= (max_omset >= 10.0)
     elif sel_omset == "40JT UP": mask &= (max_omset >= 40.0)
 
-    # Hanya ambil dataframe yang sesuai filter (Sangat Ringan)
-    df_filter = df[mask].copy()
-    df_filter['max_omset'] = max_omset[mask]
-    df_filter = df_filter.sort_values(by='max_omset', ascending=False).reset_index(drop=True)
+    # Ambil index data yang valid saja (RAM 0%)
+    valid_indices = np.where(mask)[0]
+    
+    # Sorting Index
+    valid_max_omsets = max_omset[valid_indices]
+    sorted_order = np.argsort(-valid_max_omsets) # Urut terbesar ke terkecil
+    sorted_indices = valid_indices[sorted_order]
 
-    if "page_lintas" not in st.session_state: st.session_state.page_lintas = 1
+    # --- PAGINATION ---
+    total_items = len(sorted_indices)
     items_per_page = 25
-    total_pages = math.ceil(len(df_filter) / items_per_page) if len(df_filter) > 0 else 1
+    total_pages = math.ceil(total_items / items_per_page) if total_items > 0 else 1
+    
+    if "page_lintas" not in st.session_state: st.session_state.page_lintas = 1
     if st.session_state.page_lintas > total_pages: st.session_state.page_lintas = 1
     if st.session_state.page_lintas < 1: st.session_state.page_lintas = 1
 
     start_idx = (st.session_state.page_lintas - 1) * items_per_page
     end_idx = start_idx + items_per_page
-    df_page = df_filter.iloc[start_idx:end_idx]
+    
+    # Render persis 25 baris saja, tidak meng-copy DF jutaan baris
+    page_indices = sorted_indices[start_idx:end_idx]
+    df_page = df.iloc[page_indices]
 
     def prev_page(): st.session_state.page_lintas -= 1
     def next_page(): st.session_state.page_lintas += 1
 
     pg_c1, pg_c2, pg_c3 = st.columns([1, 2, 1])
     with pg_c1: st.button("⬅️ Previous", disabled=(st.session_state.page_lintas <= 1), on_click=prev_page, use_container_width=True)
-    with pg_c2: st.markdown(f"<div style='text-align: center; margin-top: 8px; font-weight: bold;'>Halaman {st.session_state.page_lintas} dari {total_pages} (Total: {len(df_filter)} Toko Ditemukan)</div>", unsafe_allow_html=True)
+    with pg_c2: st.markdown(f"<div style='text-align: center; margin-top: 8px; font-weight: bold;'>Halaman {st.session_state.page_lintas} dari {total_pages} (Total: {total_items} Toko Ditemukan)</div>", unsafe_allow_html=True)
     with pg_c3: st.button("Next ➡️", disabled=(st.session_state.page_lintas >= total_pages), on_click=next_page, use_container_width=True)
 
     # --- HTML TABEL DENGAN KOLOM SPACER (PEMISAH) ---
     def fmt_val(v): 
         try:
             val = float(v)
-            return "-" if val == 0 else f"{val:,.1f}"
+            return "-" if math.isnan(val) or val == 0 else f"{val:,.1f}"
         except: return "-"
 
     thead_html = """<style>
@@ -577,21 +592,13 @@ elif page == "lintas_divisi":
 
 /* CSS UNTUK KOLOM PEMISAH (SPACER) */
 .col-spacer {
-    min-width: 15px !important;
-    max-width: 15px !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    background-color: #ffffff !important; 
-    border-top: none !important;
-    border-bottom: none !important;
-    border-left: none !important; 
-    border-right: none !important;
+    min-width: 15px !important; max-width: 15px !important; padding: 0 !important; margin: 0 !important;
+    background-color: #ffffff !important; border-top: none !important; border-bottom: none !important;
+    border-left: none !important; border-right: none !important;
 }
 
 .tbl-ld tbody tr:nth-child(even) { background-color: #f9fafb; }
 .tbl-ld tbody tr:hover { background-color: #e5e7eb; }
-
-/* Mencegah hover mengubah warna spacer */
 .tbl-ld tbody tr:nth-child(even) .col-spacer { background-color: #ffffff !important; }
 .tbl-ld tbody tr:hover .col-spacer { background-color: #ffffff !important; }
 </style>
@@ -633,7 +640,10 @@ elif page == "lintas_divisi":
     for _, row in df_page.iterrows():
         tbody_html += "<tr>"
         tbody_html += f"<td class='td-left'>{row.get('depo', '-')}</td>"
-        tbody_html += f"<td class='td-left'>{row.get('kdCust_orig', '-')}</td>"
+        
+        # Ambil kdCust dari orig yang tersimpan (atau dari clean jika missing)
+        kd_val = row.get('kdCust_orig', row.get('kdCust_clean', '-'))
+        tbody_html += f"<td class='td-left'>{kd_val}</td>"
         tbody_html += f"<td class='td-left'><b>{row.get('cust', '-')}</b></td>"
         
         # Spacer
@@ -659,7 +669,7 @@ elif page == "lintas_divisi":
         
         tbody_html += "</tr>"
         
-    if len(df_page) == 0: 
+    if total_items == 0: 
         tbody_html += "<tr><td colspan='24' style='text-align:center; padding: 30px; font-weight: bold; color: #ef4444;'>TIDAK ADA DATA TOKO YANG MEMENUHI KRITERIA PENCARIAN INI</td></tr>"
     
     tfoot_html = "</tbody></table></div>"
