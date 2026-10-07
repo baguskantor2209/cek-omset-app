@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 import pytz
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components  # <-- TAMBAHAN IMPORT BARU
 
 # Custom Import untuk Export PDF
 from reportlab.lib import colors
@@ -96,14 +95,13 @@ label[data-baseweb="radio"] { display: none; }
 # --- ASSISTIVE TOUCH (iPHONE STYLE - CUSTOM) ---
 assistive_touch_html = """
 <style>
-/* Kontainer AssistiveTouch (Ditambah transition untuk gerakan mulus jika diperlukan, dipindah ke ID untuk JS) */
+/* Kontainer AssistiveTouch (Pindah ke Kiri Bawah) */
 .assistive-touch-container {
     position: fixed;
     bottom: 35px;
-    left: 35px; 
+    left: 35px; /* DIUBAH DARI RIGHT KE LEFT */
     z-index: 999999;
     font-family: 'Segoe UI', Arial, sans-serif;
-    /* transition dihapus dari container agar drag terasa mulus (realtime) */
 }
 
 /* Checkbox disembunyikan sebagai trigger klik */
@@ -148,11 +146,11 @@ assistive_touch_html = """
     transition: all 0.4s;
 }
 
-/* Menu yang muncul saat diklik */
+/* Menu yang muncul saat diklik (Posisi menyesuaikan di Kiri, dengan efek berputar) */
 .at-menu {
     position: absolute;
     bottom: 75px;
-    left: 0;
+    left: 0; /* Menyesuaikan agar muncul di sisi kiri */
     background: rgba(255, 255, 255, 0.95);
     border-radius: 16px;
     padding: 10px;
@@ -162,8 +160,9 @@ assistive_touch_html = """
     gap: 8px;
     opacity: 0;
     visibility: hidden;
+    /* AWAL ANIMASI: Mengecil, turun, dan terputar -90 derajat */
     transform: scale(0.5) translateY(30px) rotate(-90deg); 
-    transform-origin: bottom left; 
+    transform-origin: bottom left; /* Titik putar di sudut kiri bawah */
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     box-shadow: 0 10px 30px rgba(0,0,0,0.15);
     backdrop-filter: blur(15px);
@@ -175,9 +174,11 @@ assistive_touch_html = """
 .at-checkbox:checked ~ .at-menu {
     opacity: 1;
     visibility: visible;
+    /* AKHIR ANIMASI: Membesar, ke posisi awal, rotasi lurus (0 derajat) -> EFEK BERPUTAR */
     transform: scale(1) translateY(0) rotate(0deg); 
 }
 .at-checkbox:checked ~ .at-button {
+    /* TOMBOL IKUT BERPUTAR 360 DERAJAT */
     transform: scale(0.95) rotate(360deg); 
     box-shadow: 0 4px 15px rgba(59, 130, 246, 0.6);
 }
@@ -211,115 +212,16 @@ assistive_touch_html = """
 }
 </style>
 
-<!-- Ditambahkan id="at-container" dan id="at-handle" untuk dibaca oleh JavaScript -->
-<div class="assistive-touch-container" id="at-container">
+<div class="assistive-touch-container">
     <input type="checkbox" id="at-toggle" class="at-checkbox">
     <div class="at-menu">
+        <!-- Tambahan onclick JS agar otomatis menutup ketika ditekan -->
         <a href="#dashboard-cek-omset-toko" class="at-item" onclick="document.getElementById('at-toggle').checked = false;">📊 Cek Omset Toko</a>
     </div>
-    <label for="at-toggle" class="at-button" id="at-handle"></label>
+    <label for="at-toggle" class="at-button"></label>
 </div>
 """
 st.markdown(assistive_touch_html, unsafe_allow_html=True)
-
-# --- SCRIPT JAVASCRIPT UNTUK FITUR DRAG (GESER) & AUTO-SAVE POSISI ---
-draggable_js = """
-<script>
-    // Karena kita menempel JS di Streamlit, kita perlu memanggil element dari window parent
-    const doc = window.parent.document;
-    const container = doc.getElementById('at-container');
-    const handle = doc.getElementById('at-handle');
-
-    if (container && handle && !container.dataset.dragReady) {
-        container.dataset.dragReady = 'true';
-        
-        let isDragging = false;
-        let hasMoved = false; // Deteksi apakah beneran digeser atau cuma diklik
-        let startX, startY, initialLeft, initialTop;
-
-        // BACA POSISI TERAKHIR DARI MEMORI BROWSER (LocalStorage)
-        const savedLeft = localStorage.getItem('at-left');
-        const savedTop = localStorage.getItem('at-top');
-        if (savedLeft && savedTop) {
-            container.style.left = savedLeft;
-            container.style.top = savedTop;
-            container.style.bottom = 'auto'; // Matikan default bottom
-        }
-
-        function onMouseDown(e) {
-            isDragging = false;
-            hasMoved = false;
-            if (e.type === 'touchstart') {
-                startX = e.touches[0].clientX;
-                startY = e.touches[0].clientY;
-            } else {
-                startX = e.clientX;
-                startY = e.clientY;
-            }
-            
-            const rect = container.getBoundingClientRect();
-            initialLeft = rect.left;
-            initialTop = rect.top;
-            
-            doc.addEventListener('mousemove', onMouseMove);
-            doc.addEventListener('mouseup', onMouseUp);
-            doc.addEventListener('touchmove', onMouseMove, {passive: false});
-            doc.addEventListener('touchend', onMouseUp);
-        }
-
-        function onMouseMove(e) {
-            let currentX, currentY;
-            if (e.type === 'touchmove') {
-                currentX = e.touches[0].clientX;
-                currentY = e.touches[0].clientY;
-            } else {
-                currentX = e.clientX;
-                currentY = e.clientY;
-            }
-
-            const dx = currentX - startX;
-            const dy = currentY - startY;
-
-            // Jika geseran lebih dari 5 pixel, maka itu sedang di-drag (bukan klik biasa)
-            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-                isDragging = true;
-                hasMoved = true;
-                e.preventDefault(); // Mencegah layar ikut tergulir (scroll) saat digeser di HP
-                
-                container.style.left = (initialLeft + dx) + 'px';
-                container.style.top = (initialTop + dy) + 'px';
-                container.style.bottom = 'auto';
-            }
-        }
-
-        function onMouseUp(e) {
-            doc.removeEventListener('mousemove', onMouseMove);
-            doc.removeEventListener('mouseup', onMouseUp);
-            doc.removeEventListener('touchmove', onMouseMove);
-            doc.removeEventListener('touchend', onMouseUp);
-            
-            // SIMPAN POSISI BARU KE MEMORI BROWSER
-            if (hasMoved) {
-                localStorage.setItem('at-left', container.style.left);
-                localStorage.setItem('at-top', container.style.top);
-            }
-            setTimeout(() => { isDragging = false; }, 50);
-        }
-
-        // Cegah menu terbuka saat sedang di-drag
-        handle.addEventListener('click', (e) => {
-            if (hasMoved) {
-                e.preventDefault(); 
-            }
-        });
-
-        handle.addEventListener('mousedown', onMouseDown);
-        handle.addEventListener('touchstart', onMouseDown, {passive: false});
-    }
-</script>
-"""
-# Eksekusi Script JS agar tersembunyi
-components.html(draggable_js, height=0, width=0)
 
 
 # --- FUNGSI LAST UPDATED DARI GITHUB API ---
