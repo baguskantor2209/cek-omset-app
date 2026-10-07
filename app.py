@@ -244,10 +244,9 @@ def load_data_from_github():
         for b in bln_list_all:
             col_name = f"{b}_{suf}"
             if col_name in df_bdb.columns:
-                # float32 memakan setengah memori dibanding float64 bawaan Pandas
                 df_bdb[col_name] = pd.to_numeric(df_bdb[col_name], errors='coerce', downcast='float').fillna(0.0)
 
-    # Khusus untuk kebutuhan Lintas Divisi, pastikan kolom ini ada (buat dengan float32 agar ringan)
+    # Khusus untuk Lintas Divisi
     for d in ['AB2', 'AB3', 'AB4']:
         for p in ['JUL26', 'AGT26', 'SEP26', 'OKT26', 'RT225', 'SM225']:
             c = f"{p}_{d}"
@@ -292,20 +291,16 @@ def format_month_label(bln_code):
     prefix = str(bln_code)[:3].upper()
     return f"{months_map.get(prefix, prefix)} 2026" if "26" in str(bln_code) else months_map.get(prefix, prefix)
 
-# --- OPTIMASI 2: Aggregasi Cepat (Tanpa apply numeric berulang) ---
+# --- OPTIMASI 2: Aggregasi Cepat ---
 def aggregate_store_rows(sub_df):
     first_row = sub_df.iloc[0].copy()
     if len(sub_df) == 1: return first_row
     
     numeric_suffixes = ["TOR", "UCV", "KTD", "RBL", "UCW", "ISO", "EDV", "CZLSN", "CZKRT", "R3", "R06EXC", "ALK", "ALKREG", "ALKNONREG", "MAA", "HC", "AB4"]
-    
-    # Hanya ambil kolom yang benar-benar ada dan bertipe numerik
     num_cols = [c for c in sub_df.columns if any(c.endswith(f"_{suf}") for suf in numeric_suffixes) and pd.api.types.is_numeric_dtype(sub_df[c])]
     
-    # Kalkulasi penjumlahan yang cepat
     sums = sub_df[num_cols].sum()
-    for c in num_cols:
-        first_row[c] = sums[c]
+    for c in num_cols: first_row[c] = sums[c]
         
     first_row["cust"] = f"{first_row['Nama_Pemilik']} ( Grouping ) [{len(sub_df)} Toko Cabang]"
     return first_row
@@ -423,7 +418,6 @@ if page == "cek_omset":
                 selected_code = selected_toko.split(" - ")[0].strip().upper()
                 sub_df = df[df["search_code"].astype(str).str.strip().str.upper() == selected_code]
                 
-                # Menggunakan agregasi cepat
                 row = aggregate_store_rows(sub_df)
                 selected_rows.append(row)
 
@@ -480,50 +474,47 @@ elif page == "lintas_divisi":
     with st.spinner("⚡ Memuat database..."):
         df = load_data_from_github()
 
-    # Menyiapkan List Wilayah
     list_wilayah = ["SEMUA WILAYAH"]
     if "wilayah" in df.columns:
         w_opts = sorted([w for w in df["wilayah"].unique() if w != "LAINNYA"])
         list_wilayah.extend(w_opts)
         if "LAINNYA" in df["wilayah"].unique(): list_wilayah.append("LAINNYA")
 
-    # Fungsi Reset Page
     def reset_page_lintas(): st.session_state.page_lintas = 1
 
-    st.markdown("<div style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>⚙️ Filter Pencarian</div>", unsafe_allow_html=True)
+    # --- PENAMBAHAN LABEL CUSTOM UNTUK FILTER ---
     c1, c2, c3 = st.columns(3)
-    with c1: sel_wilayah = st.selectbox("🌍 Filter Wilayah", list_wilayah, on_change=reset_page_lintas)
-    with c2: sel_divisi = st.selectbox("🏢 Filter Divisi", ["AB2", "AB3"], on_change=reset_page_lintas)
-    with c3: sel_omset = st.selectbox("💰 Filter Omset (Berdasarkan Max Jul-Sep)", ["Semua", "1JT UP", "5JT UP", "10JT UP", "40JT UP"], on_change=reset_page_lintas)
+    with c1: 
+        st.markdown("<div style='font-size:14px; font-weight:700; color:#1f2937; margin-bottom:4px;'>🌍 Wilayah</div>", unsafe_allow_html=True)
+        sel_wilayah = st.selectbox("lbl_w", list_wilayah, label_visibility="collapsed", on_change=reset_page_lintas)
+    with c2: 
+        st.markdown("<div style='font-size:14px; font-weight:700; color:#1f2937; margin-bottom:4px;'>🏢 Divisi</div>", unsafe_allow_html=True)
+        sel_divisi = st.selectbox("lbl_d", ["AB2", "AB3"], label_visibility="collapsed", on_change=reset_page_lintas)
+    with c3: 
+        st.markdown("<div style='font-size:14px; font-weight:700; color:#1f2937; margin-bottom:4px;'>💰 Strata</div>", unsafe_allow_html=True)
+        sel_omset = st.selectbox("lbl_s", ["Semua", "1JT UP", "5JT UP", "10JT UP", "40JT UP"], label_visibility="collapsed", on_change=reset_page_lintas)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- LOGIKA FILTERING SUPER CEPAT ---
     df_filter = df.copy()
 
-    # 1. Filter Wilayah
     if sel_wilayah != "SEMUA WILAYAH": df_filter = df_filter[df_filter['wilayah'] == sel_wilayah]
 
-    # 2. Belum Transaksi AB4 (JUL-SEP) - Angka sudah numeric dari awal
     df_filter = df_filter[
         (df_filter['JUL26_AB4'] == 0) & 
         (df_filter['AGT26_AB4'] == 0) & 
         (df_filter['SEP26_AB4'] == 0)
     ]
 
-    # 3. Hitung Max Omset Divisi
     df_filter['max_omset'] = df_filter[[f'JUL26_{sel_divisi}', f'AGT26_{sel_divisi}', f'SEP26_{sel_divisi}']].max(axis=1)
 
-    # 4. Limit Omset
     if sel_omset == "1JT UP": df_filter = df_filter[df_filter['max_omset'] >= 1.0]
     elif sel_omset == "5JT UP": df_filter = df_filter[df_filter['max_omset'] >= 5.0]
     elif sel_omset == "10JT UP": df_filter = df_filter[df_filter['max_omset'] >= 10.0]
     elif sel_omset == "40JT UP": df_filter = df_filter[df_filter['max_omset'] >= 40.0]
 
-    # 5. Sorting
     df_filter = df_filter.sort_values(by='max_omset', ascending=False).reset_index(drop=True)
 
-    # --- PAGINATION ---
     if "page_lintas" not in st.session_state: st.session_state.page_lintas = 1
     items_per_page = 25
     total_pages = math.ceil(len(df_filter) / items_per_page) if len(df_filter) > 0 else 1
@@ -542,10 +533,9 @@ elif page == "lintas_divisi":
     with pg_c2: st.markdown(f"<div style='text-align: center; margin-top: 8px; font-weight: bold;'>Halaman {st.session_state.page_lintas} dari {total_pages} (Total: {len(df_filter)} Toko Ditemukan)</div>", unsafe_allow_html=True)
     with pg_c3: st.button("Next ➡️", disabled=(st.session_state.page_lintas >= total_pages), on_click=next_page, use_container_width=True)
 
-    # --- RENDER TABEL HTML ---
+    # --- HTML TABEL DENGAN KOLOM SPACER (PEMISAH) ---
     def fmt_val(v): return "-" if v == 0 else f"{v:,.1f}"
 
-    # HILANGKAN SPASI DI AWAL BARIS HTML AGAR TIDAK DIANGGAP CODE BLOCK OLEH MARKDOWN
     thead_html = """<style>
 .tbl-ld { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; margin-top: 15px; margin-bottom: 25px; }
 .tbl-ld th, .tbl-ld td { border: 1px solid #111827; padding: 6px 4px; text-align: center; white-space: nowrap; }
@@ -554,9 +544,28 @@ elif page == "lintas_divisi":
 .bg-blue { background-color: #00B0F0; color: #000; font-weight: 800; }
 .bg-green { background-color: #92D050; color: #000; font-weight: 800; }
 .td-left { text-align: left !important; padding-left: 8px !important; }
+
+/* CSS UNTUK KOLOM PEMISAH (SPACER) */
+.col-spacer {
+    min-width: 15px !important;
+    max-width: 15px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background-color: #ffffff !important; 
+    border-top: none !important;
+    border-bottom: none !important;
+    border-left: none !important; 
+    border-right: none !important;
+}
+
 .tbl-ld tbody tr:nth-child(even) { background-color: #f9fafb; }
 .tbl-ld tbody tr:hover { background-color: #e5e7eb; }
+
+/* Mencegah hover mengubah warna spacer */
+.tbl-ld tbody tr:nth-child(even) .col-spacer { background-color: #ffffff !important; }
+.tbl-ld tbody tr:hover .col-spacer { background-color: #ffffff !important; }
 </style>
+
 <div style="overflow-x: auto; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
 <table class="tbl-ld">
     <thead>
@@ -564,14 +573,28 @@ elif page == "lintas_divisi":
             <th rowspan="2" class="bg-orange">DEPO</th>
             <th rowspan="2" class="bg-orange">KD CUST</th>
             <th rowspan="2" class="bg-orange" style="min-width: 200px;">NAMA CUST</th>
+            
+            <th class="col-spacer" rowspan="2"></th> <!-- Spacer Kiri AB2 -->
             <th colspan="6" class="bg-yellow">DIVISI AB2</th>
+            
+            <th class="col-spacer" rowspan="2"></th> <!-- Spacer Tengah AB3 -->
             <th colspan="6" class="bg-orange">DIVISI AB3</th>
+            
+            <th class="col-spacer" rowspan="2"></th> <!-- Spacer Kanan AB4 -->
             <th colspan="6" class="bg-blue">DIVISI AB4</th>
         </tr>
         <tr>
-            <th class="bg-green">RT2 25</th><th class="bg-green">SM2 25</th><th class="bg-yellow">JUL 26</th><th class="bg-yellow">AGT 26</th><th class="bg-yellow">SEP 26</th><th class="bg-yellow">OKT 26</th>
-            <th class="bg-green">RT2 25</th><th class="bg-green">SM2 25</th><th class="bg-orange">JUL 26</th><th class="bg-orange">AGT 26</th><th class="bg-orange">SEP 26</th><th class="bg-orange">OKT 26</th>
-            <th class="bg-green">RT2 25</th><th class="bg-green">SM2 25</th><th class="bg-blue">JUL 26</th><th class="bg-blue">AGT 26</th><th class="bg-blue">SEP 26</th><th class="bg-blue">OKT 26</th>
+            <!-- AB2 -->
+            <th class="bg-green">RT2 25</th><th class="bg-green">SM2 25</th>
+            <th class="bg-yellow">JUL 26</th><th class="bg-yellow">AGT 26</th><th class="bg-yellow">SEP 26</th><th class="bg-yellow">OKT 26</th>
+            
+            <!-- AB3 -->
+            <th class="bg-green">RT2 25</th><th class="bg-green">SM2 25</th>
+            <th class="bg-orange">JUL 26</th><th class="bg-orange">AGT 26</th><th class="bg-orange">SEP 26</th><th class="bg-orange">OKT 26</th>
+            
+            <!-- AB4 -->
+            <th class="bg-green">RT2 25</th><th class="bg-green">SM2 25</th>
+            <th class="bg-blue">JUL 26</th><th class="bg-blue">AGT 26</th><th class="bg-blue">SEP 26</th><th class="bg-blue">OKT 26</th>
         </tr>
     </thead>
     <tbody>"""
@@ -583,18 +606,32 @@ elif page == "lintas_divisi":
         tbody_html += f"<td class='td-left'>{row.get('kdCust_orig', '-')}</td>"
         tbody_html += f"<td class='td-left'><b>{row.get('cust', '-')}</b></td>"
         
+        # Spacer
+        tbody_html += "<td class='col-spacer'></td>"
+        
+        # AB2
         tbody_html += f"<td>{fmt_val(row['RT225_AB2'])}</td><td>{fmt_val(row['SM225_AB2'])}</td>"
         tbody_html += f"<td>{fmt_val(row['JUL26_AB2'])}</td><td>{fmt_val(row['AGT26_AB2'])}</td><td>{fmt_val(row['SEP26_AB2'])}</td><td>{fmt_val(row['OKT26_AB2'])}</td>"
         
+        # Spacer
+        tbody_html += "<td class='col-spacer'></td>"
+        
+        # AB3
         tbody_html += f"<td>{fmt_val(row['RT225_AB3'])}</td><td>{fmt_val(row['SM225_AB3'])}</td>"
         tbody_html += f"<td>{fmt_val(row['JUL26_AB3'])}</td><td>{fmt_val(row['AGT26_AB3'])}</td><td>{fmt_val(row['SEP26_AB3'])}</td><td>{fmt_val(row['OKT26_AB3'])}</td>"
         
+        # Spacer
+        tbody_html += "<td class='col-spacer'></td>"
+        
+        # AB4
         tbody_html += f"<td>{fmt_val(row['RT225_AB4'])}</td><td>{fmt_val(row['SM225_AB4'])}</td>"
         tbody_html += f"<td>{fmt_val(row['JUL26_AB4'])}</td><td>{fmt_val(row['AGT26_AB4'])}</td><td>{fmt_val(row['SEP26_AB4'])}</td><td>{fmt_val(row['OKT26_AB4'])}</td>"
         
         tbody_html += "</tr>"
         
-    if len(df_page) == 0: tbody_html += "<tr><td colspan='21' style='text-align:center; padding: 30px; font-weight: bold; color: #ef4444;'>TIDAK ADA DATA TOKO YANG MEMENUHI KRITERIA PENCARIAN INI</td></tr>"
+    if len(df_page) == 0: 
+        # Ada 24 total kolom (3 Info + 3 Spacer + 18 Kolom Data)
+        tbody_html += "<tr><td colspan='24' style='text-align:center; padding: 30px; font-weight: bold; color: #ef4444;'>TIDAK ADA DATA TOKO YANG MEMENUHI KRITERIA PENCARIAN INI</td></tr>"
     
     tfoot_html = "</tbody></table></div>"
     
