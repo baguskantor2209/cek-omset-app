@@ -92,6 +92,136 @@ label[data-baseweb="radio"] { display: none; }
     unsafe_allow_html=True,
 )
 
+# --- ASSISTIVE TOUCH (iPHONE STYLE) ---
+assistive_touch_html = """
+<style>
+/* Kontainer AssistiveTouch */
+.assistive-touch-container {
+    position: fixed;
+    bottom: 35px;
+    right: 35px;
+    z-index: 999999;
+    font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+/* Checkbox disembunyikan sebagai trigger klik */
+.at-checkbox {
+    display: none;
+}
+
+/* Tombol bulat ala iPhone */
+.at-button {
+    width: 60px;
+    height: 60px;
+    background: rgba(40, 40, 40, 0.85);
+    border-radius: 20px; /* Bisa diganti 50% jika ingin bulat sempurna */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+
+/* Lingkaran dalam AssistiveTouch */
+.at-button::after {
+    content: "";
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 3.5px solid rgba(255,255,255,0.8);
+    box-sizing: border-box;
+    transition: all 0.3s;
+}
+.at-button::before {
+    content: "";
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.8);
+    position: absolute;
+    transition: all 0.3s;
+}
+
+/* Menu yang muncul saat diklik (Bergulir) */
+.at-menu {
+    position: absolute;
+    bottom: 75px;
+    right: 0;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    padding: 10px;
+    width: 230px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0.8) translateY(20px);
+    transform-origin: bottom right;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* Animasi ketika AssistiveTouch diklik */
+.at-checkbox:checked ~ .at-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1) translateY(0);
+}
+.at-checkbox:checked ~ .at-button {
+    background: rgba(20, 20, 20, 0.95);
+    transform: scale(0.95);
+}
+.at-checkbox:checked ~ .at-button::after, 
+.at-checkbox:checked ~ .at-button::before {
+    opacity: 0.5;
+}
+
+/* List Form/Menu di dalamnya */
+.at-item {
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #1f2937 !important;
+    text-decoration: none !important;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s ease;
+    border: 1px solid #f3f4f6;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.at-item:hover {
+    background: #f8fafc;
+    transform: scale(1.02);
+    color: #2563eb !important;
+    border-color: #bfdbfe;
+}
+</style>
+
+<div class="assistive-touch-container">
+    <input type="checkbox" id="at-toggle" class="at-checkbox">
+    <div class="at-menu">
+        <!-- Link otomatis scroll ke atas / ke Dashboard -->
+        <a href="#dashboard-cek-omset-toko" class="at-item">📊 Cek Omset Toko</a>
+        <!-- Nanti form lainnya bisa ditambahkan di bawah ini -->
+    </div>
+    <label for="at-toggle" class="at-button"></label>
+</div>
+"""
+st.markdown(assistive_touch_html, unsafe_allow_html=True)
+# ----------------------------------------
+
 # --- FUNGSI LAST UPDATED DARI GITHUB API ---
 @st.cache_data(ttl=300) # Refresh tiap 5 menit
 def get_github_last_updated():
