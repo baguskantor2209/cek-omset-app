@@ -3,6 +3,7 @@ import os
 import math
 import traceback
 import requests
+import gc
 from datetime import datetime, timezone
 import pytz
 import pandas as pd
@@ -26,7 +27,7 @@ st.set_page_config(
     page_title="Bagus SDA AB4", layout="wide", page_icon="📊"
 )
 
-# Custom CSS
+# Custom CSS + RESPONSIVE MEDIA QUERIES
 st.markdown(
     """<style>
 header { visibility: hidden !important; height: 0px !important; display: none !important; }
@@ -42,12 +43,8 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 
 /* WARNA TOMBOL DOWNLOAD PDF */
 [data-testid="stDownloadButton"] button {
-    background-color: #2563eb !important;
-    border: none !important;
-    border-radius: 8px !important;
-    padding: 12px 24px !important;
-    box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2) !important;
-    transition: all 0.3s ease !important;
+    background-color: #2563eb !important; border: none !important; border-radius: 8px !important;
+    padding: 12px 24px !important; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2) !important; transition: all 0.3s ease !important;
 }
 [data-testid="stDownloadButton"] button:hover { background-color: #1d4ed8 !important; }
 [data-testid="stDownloadButton"] button p { color: #ffffff !important; font-weight: 700 !important; font-size: 14px !important; }
@@ -65,6 +62,7 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 .omset-table-container {
     background: #ffffff; padding: 16px; border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-top: 15px; margin-bottom: 25px; overflow-x: auto;
+    -webkit-overflow-scrolling: touch; /* Smooth scroll di HP */
 }
 .report-table { 
     width: 100%; min-width: 1000px; table-layout: fixed; border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; 
@@ -81,6 +79,33 @@ footer { visibility: hidden !important; height: 0px !important; display: none !i
 
 /* MENGHILANGKAN LABEL BAWAAN STREAMLIT KARENA KITA PAKAI LABEL MANUAL */
 label[data-baseweb="radio"] { display: none; }
+
+/* ========================================================
+   🔥 RESPONSIVE DESIGN (KHUSUS SMARTPHONE / LAYAR KECIL) 🔥
+   ======================================================== */
+@media (max-width: 768px) {
+    /* Mengecilkan judul & membetulkan tumpang tindih */
+    .header-container { flex-direction: column !important; align-items: flex-start !important; gap: 8px; padding-bottom: 10px !important; }
+    .custom-title { font-size: 1.5rem !important; line-height: 1.3 !important; }
+    .last-updated { font-size: 12px !important; margin-top: 0 !important; }
+    
+    /* Mengecilkan Metric Card */
+    .metric-card { padding: 12px !important; }
+    .metric-value { font-size: 1.25rem !important; }
+    .metric-title { font-size: 0.7rem !important; }
+    .metric-subtitle { font-size: 0.75rem !important; }
+    
+    /* Mengecilkan label filter */
+    .filter-label { font-size: 13px !important; margin-bottom: 2px !important; }
+    
+    /* Memperkecil Assistive Touch agar tidak menutupi layar */
+    .assistive-touch-container { left: 15px !important; bottom: 15px !important; }
+    .at-button { width: 48px !important; height: 48px !important; }
+    .at-button::after { width: 32px !important; height: 32px !important; border-width: 2.5px !important; }
+    .at-button::before { width: 20px !important; height: 20px !important; }
+    .at-menu { left: 0; bottom: 60px !important; width: 200px !important; }
+    .at-item { padding: 10px 14px !important; font-size: 13px !important; }
+}
 </style>""",
     unsafe_allow_html=True,
 )
@@ -213,8 +238,8 @@ def map_wilayah(depo_str):
     if any(code in val for code in bodebek_codes): return "BODEBEK"
     return "LAINNYA"
 
-# --- OPTIMASI MEMORI: Pemrosesan Angka yang Hemat RAM ---
-@st.cache_data
+# --- OPTIMASI MEMORI EXTREME ---
+@st.cache_data(show_spinner=False)
 def load_data_from_github():
     bdb_candidates = ["BDB_AB4.parquet", "BDB AB4.parquet", "BDB_AB4.csv.gz", "BDB_AB4.csv", "BDB_AB4.xlsx"]
     target_bdb = next((f for f in bdb_candidates if os.path.exists(f)), None)
@@ -227,7 +252,7 @@ def load_data_from_github():
     cust_name_col = next((c for c in df_bdb.columns if c.lower() in ["cust", "nama customer", "nama toko"]), "cust")
     
     df_bdb["kdCust_orig"] = df_bdb[kd_cust_col].astype(str).str.strip().str.upper()
-    df_bdb["kdCust_clean"] = df_bdb["kdCust_orig"].str.replace("-", "", regex=False).str.replace(" ", "", regex=False).str.replace(".", "", regex=False)
+    df_bdb["kdCust_clean"] = df_bdb["kdCust_orig"].str.replace(r'[- .]', '', regex=True)
     df_bdb["cust"] = df_bdb[cust_name_col].astype(str).str.strip()
     
     if "depo" in df_bdb.columns:
@@ -236,7 +261,9 @@ def load_data_from_github():
     else:
         df_bdb["wilayah"] = "LAINNYA"
 
-    # HANYA convert kolom yang sudah ada dan gunakan 'downcast' agar hemat RAM 50%
+    df_bdb["wilayah"] = df_bdb["wilayah"].astype("category")
+    df_bdb["depo"] = df_bdb["depo"].astype("category")
+
     numeric_suffixes = ["TOR", "UCV", "KTD", "RBL", "UCW", "ISO", "EDV", "CZLSN", "CZKRT", "R3", "R06EXC", "ALK", "ALKREG", "ALKNONREG", "MAA", "HC", "AB4", "AB2", "AB3"]
     bln_list_all = ["RT225", "SM225", "JAN26", "FEB26", "MAR26", "APR26", "MEI26", "JUN26", "JUL26", "AGT26", "SEP26", "OKT26"]
     
@@ -246,7 +273,6 @@ def load_data_from_github():
             if col_name in df_bdb.columns:
                 df_bdb[col_name] = pd.to_numeric(df_bdb[col_name], errors='coerce', downcast='float').fillna(0.0)
 
-    # Khusus untuk Lintas Divisi
     for d in ['AB2', 'AB3', 'AB4']:
         for p in ['JUL26', 'AGT26', 'SEP26', 'OKT26', 'RT225', 'SM225']:
             c = f"{p}_{d}"
@@ -264,16 +290,18 @@ def load_data_from_github():
         col_nm_pemilik = col_lookup.get("nama tk pemilik") or col_lookup.get("namatkpemilik")
 
         if col_kd_cust and col_kd_pemilik and col_nm_pemilik:
-            df_group["clean_kd_cust"] = df_group[col_kd_cust].astype(str).str.strip().str.upper().str.replace("-", "", regex=False).str.replace(" ", "", regex=False).str.replace(".", "", regex=False)
-            df_group["clean_kd_pemilik"] = df_group[col_kd_pemilik].astype(str).str.strip().str.upper().str.replace("-", "", regex=False).str.replace(" ", "", regex=False).str.replace(".", "", regex=False)
-            df_group["clean_nm_pemilik"] = df_group[col_nm_pemilik].astype(str).str.strip()
+            clean_cust = df_group[col_kd_cust].astype(str).str.strip().str.upper().str.replace(r'[- .]', '', regex=True)
+            clean_pemilik = df_group[col_kd_pemilik].astype(str).str.strip().str.upper().str.replace(r'[- .]', '', regex=True)
+            clean_nm_pemilik = df_group[col_nm_pemilik].astype(str).str.strip()
 
-            map_pemilik_code = df_group.set_index("clean_kd_cust")["clean_kd_pemilik"].to_dict()
-            map_pemilik_name = df_group.set_index("clean_kd_cust")["clean_nm_pemilik"].to_dict()
+            map_pemilik_code = dict(zip(clean_cust, clean_pemilik))
+            map_pemilik_name = dict(zip(clean_cust, clean_nm_pemilik))
 
             df_bdb["Kd_Pemilik"] = df_bdb["kdCust_clean"].map(map_pemilik_code).fillna(df_bdb["kdCust_clean"])
             df_bdb["Nama_Pemilik"] = df_bdb["kdCust_clean"].map(map_pemilik_name).fillna(df_bdb["cust"])
             df_bdb["Is_Group"] = df_bdb["kdCust_clean"].isin(map_pemilik_code)
+            
+            del df_group
         else:
             df_bdb["Kd_Pemilik"], df_bdb["Nama_Pemilik"], df_bdb["Is_Group"] = df_bdb["kdCust_clean"], df_bdb["cust"], False
     else:
@@ -282,6 +310,7 @@ def load_data_from_github():
     df_bdb["search_code"] = df_bdb["Kd_Pemilik"]
     df_bdb["search_name"] = df_bdb.apply(lambda r: f"{r['Nama_Pemilik']} ( Grouping )" if r["Is_Group"] else r["cust"], axis=1)
     
+    gc.collect()
     return df_bdb
 
 def f_num(val): return f"{val:,.0f}" if val and val != 0 else "-"
@@ -378,13 +407,15 @@ if page == "cek_omset":
     # HALAMAN 1: DASHBOARD CEK OMSET TOKO
     # ----------------------------------------------------
     try:
-        st.title("📊 Dashboard Cek Omset Toko")
-        st.markdown(
-            f"<div style='text-align: right; margin-top: -35px; margin-bottom: 20px; color: #4b5563; font-size: 15px;'>"
-            f"🕘 Last Updated : &nbsp;<span style='color: #2563eb; font-weight: bold;'>{get_github_last_updated()}</span>"
-            f"</div>", unsafe_allow_html=True
-        )
-        st.markdown("<hr style='margin-top: -10px; margin-bottom: 25px;'>", unsafe_allow_html=True)
+        # PENGGUNAAN HEADER RESPONSIVE DENGAN FLEXBOX
+        st.markdown(f"""
+        <div class="header-container" style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 20px;">
+            <h1 class="custom-title" style="margin: 0; padding: 0; font-size: 2.2rem; color: #111827;">📊 Dashboard Cek Omset Toko</h1>
+            <div class="last-updated" style="color: #4b5563; font-size: 14px; font-weight: 500;">
+                🕘 Last Updated : <span style='color: #2563eb; font-weight: bold;'>{get_github_last_updated()}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         with st.spinner("⚡ Memuat database & Sinkronisasi Grouping Toko..."):
             df = load_data_from_github()
@@ -396,7 +427,7 @@ if page == "cek_omset":
             
         list_wilayah.insert(0, "SEMUA WILAYAH")
         
-        st.markdown("<div style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🌍 Filter By Wilayah</div>", unsafe_allow_html=True)
+        st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🌍 Filter By Wilayah</div>", unsafe_allow_html=True)
         selected_wilayah = st.selectbox("label_wilayah", options=list_wilayah, label_visibility="collapsed")
 
         if selected_wilayah != "SEMUA WILAYAH": df_filtered = df[df["wilayah"] == selected_wilayah]
@@ -407,7 +438,7 @@ if page == "cek_omset":
         toko_df = df_filtered[["search_code", "search_name"]].drop_duplicates()
         toko_options = (toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique()
 
-        st.markdown("<div style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🔍 Cari Toko</div>", unsafe_allow_html=True)
+        st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🔍 Cari Toko</div>", unsafe_allow_html=True)
         selected_tokos = st.multiselect("label_toko", options=list(toko_options), max_selections=5, placeholder="Ketik Kode / Nama Toko (Atau Toko Grouping)...", label_visibility="collapsed")
 
         bln_list = ["JAN26", "FEB26", "MAR26", "APR26", "MEI26", "JUN26", "JUL26", "AGT26", "SEP26", "OKT26"]
@@ -443,7 +474,7 @@ if page == "cek_omset":
                 with c1:
                     st.markdown(f"""<div class="metric-card" style="border-left-color: #2563eb;"><div class="metric-title">REAL OMSET OKT 26 DIVISI AB4</div><div class="metric-value">Rp {omset_okt26:,.1f} Jt</div><div class="metric-subtitle" style="color: {status_color};">{status_arrow} {abs(pct_omset):,.1f}% vs RT2 25 ({diff_omset:+,.1f} Jt)</div><div class="metric-subtitle" style="color: {status_color_sm1}; margin-top: 5px;">{status_arrow_sm1} {abs(pct_sm1):,.1f}% vs SM1 26 ({diff_sm1:+,.1f} Jt)</div></div>""", unsafe_allow_html=True)
                 with c2:
-                    st.markdown(f"""<div class="metric-card" style="border-left-color: #06b6d4;"><div class="metric-title">OMSET TERBESAR DIVISI AB4</div><div class="metric-value" style="font-size: 1.25rem;">Puncak Omset Pada Bulan <b>{format_month_label(max_month_code)}</b></div><div class="metric-subtitle" style="color: #06b6d4;">Dengan Jumlah Omset Rp {max_val:,.1f} Jt</div></div>""", unsafe_allow_html=True)
+                    st.markdown(f"""<div class="metric-card" style="border-left-color: #06b6d4;"><div class="metric-title">OMSET TERBESAR DIVISI AB4</div><div class="metric-value">Puncak Omset Pada Bulan <b>{format_month_label(max_month_code)}</b></div><div class="metric-subtitle" style="color: #06b6d4;">Dengan Jumlah Omset Rp {max_val:,.1f} Jt</div></div>""", unsafe_allow_html=True)
 
                 def fmt_v(suf): return "".join([f"<td>{f_num(row.get(f'{b}_{suf}', 0))}</td>" for b in bln_list])
                 def fmt_raw(suf): return "".join([f"<td>{f_dec(row.get(f'{b}_{suf}', 0))}</td>" for b in bln_list])
@@ -468,8 +499,13 @@ elif page == "lintas_divisi":
     # ----------------------------------------------------
     # HALAMAN 2: TOKO LINTAS DIVISI
     # ----------------------------------------------------
-    st.title("🔄 Dashboard Toko Lintas Divisi Belum Transaksi AB4")
-    st.markdown("<hr style='margin-top: -10px; margin-bottom: 25px;'>", unsafe_allow_html=True)
+    
+    # PENGGUNAAN HEADER RESPONSIVE DENGAN FLEXBOX
+    st.markdown("""
+    <div class="header-container" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 20px;">
+        <h1 class="custom-title" style="margin: 0; padding: 0; font-size: 2.2rem; color: #111827;">🔄 Toko Lintas Divisi Belum Transaksi AB4</h1>
+    </div>
+    """, unsafe_allow_html=True)
     
     with st.spinner("⚡ Memuat database..."):
         df = load_data_from_github()
@@ -485,13 +521,13 @@ elif page == "lintas_divisi":
     # --- PENAMBAHAN LABEL CUSTOM UNTUK FILTER ---
     c1, c2, c3 = st.columns(3)
     with c1: 
-        st.markdown("<div style='font-size:14px; font-weight:700; color:#1f2937; margin-bottom:4px;'>🌍 Wilayah</div>", unsafe_allow_html=True)
+        st.markdown("<div class='filter-label' style='font-size:15px; font-weight:700; color:#1f2937; margin-bottom:4px;'>🌍 Wilayah</div>", unsafe_allow_html=True)
         sel_wilayah = st.selectbox("lbl_w", list_wilayah, label_visibility="collapsed", on_change=reset_page_lintas)
     with c2: 
-        st.markdown("<div style='font-size:14px; font-weight:700; color:#1f2937; margin-bottom:4px;'>🏢 Divisi</div>", unsafe_allow_html=True)
+        st.markdown("<div class='filter-label' style='font-size:15px; font-weight:700; color:#1f2937; margin-bottom:4px;'>🏢 Divisi</div>", unsafe_allow_html=True)
         sel_divisi = st.selectbox("lbl_d", ["AB2", "AB3"], label_visibility="collapsed", on_change=reset_page_lintas)
     with c3: 
-        st.markdown("<div style='font-size:14px; font-weight:700; color:#1f2937; margin-bottom:4px;'>💰 Strata</div>", unsafe_allow_html=True)
+        st.markdown("<div class='filter-label' style='font-size:15px; font-weight:700; color:#1f2937; margin-bottom:4px;'>💰 Strata</div>", unsafe_allow_html=True)
         sel_omset = st.selectbox("lbl_s", ["Semua", "1JT UP", "5JT UP", "10JT UP", "40JT UP"], label_visibility="collapsed", on_change=reset_page_lintas)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -566,7 +602,7 @@ elif page == "lintas_divisi":
 .tbl-ld tbody tr:hover .col-spacer { background-color: #ffffff !important; }
 </style>
 
-<div style="overflow-x: auto; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+<div class="omset-table-container">
 <table class="tbl-ld">
     <thead>
         <tr>
@@ -630,7 +666,6 @@ elif page == "lintas_divisi":
         tbody_html += "</tr>"
         
     if len(df_page) == 0: 
-        # Ada 24 total kolom (3 Info + 3 Spacer + 18 Kolom Data)
         tbody_html += "<tr><td colspan='24' style='text-align:center; padding: 30px; font-weight: bold; color: #ef4444;'>TIDAK ADA DATA TOKO YANG MEMENUHI KRITERIA PENCARIAN INI</td></tr>"
     
     tfoot_html = "</tbody></table></div>"
