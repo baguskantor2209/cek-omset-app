@@ -3,7 +3,6 @@ import os
 import math
 import traceback
 import requests
-import gc
 from datetime import datetime, timezone
 import pytz
 import pandas as pd
@@ -174,7 +173,7 @@ draggable_js = """<script>
 </script>"""
 components.html(draggable_js, height=0, width=0)
 
-# --- ENGINE LOAD DATA SUPER RINGAN ---
+# --- FUNGSI LOAD DATA (KEMBALI KE NORMAL, AMAN DARI HANG) ---
 @st.cache_data(ttl=300, show_spinner=False) 
 def get_github_last_updated():
     url = "https://api.github.com/repos/baguskantor2209/cek-omset-app/commits?path=BDB_AB4.parquet&page=1&per_page=1"
@@ -214,7 +213,6 @@ def load_data_from_github():
     target_bdb = next((f for f in bdb_candidates if os.path.exists(f)), None)
     if not target_bdb: raise FileNotFoundError("Data 'BDB_AB4' tidak ditemukan!")
     
-    # Membaca data dengan mode sangat ringan
     if target_bdb.endswith(".parquet"): df_bdb = pd.read_parquet(target_bdb)
     elif target_bdb.endswith(".csv") or target_bdb.endswith(".csv.gz"): df_bdb = pd.read_csv(target_bdb, engine="python", on_bad_lines="skip")
     else: df_bdb = pd.read_excel(target_bdb, engine="openpyxl")
@@ -233,9 +231,6 @@ def load_data_from_github():
         df_bdb["wilayah"] = df_bdb["depo"].apply(map_wilayah)
     else:
         df_bdb["wilayah"] = "LAINNYA"
-
-    df_bdb["wilayah"] = df_bdb["wilayah"].astype("category")
-    df_bdb["depo"] = df_bdb["depo"].astype("category")
 
     # LOGIKA GROUPING
     group_candidates = ["Grouping_Toko.parquet", "Grouping_Toko.csv", "Grouping_Toko.xlsx", "Grouping Toko.xlsx"]
@@ -268,7 +263,6 @@ def load_data_from_github():
             df_bdb["Kd_Pemilik"] = df_bdb["kdCust_clean"].map(map_pem_code).fillna(df_bdb["kdCust_clean"])
             df_bdb["Nama_Pemilik"] = df_bdb["kdCust_clean"].map(map_pem_name).fillna(df_bdb["cust"])
             df_bdb["Is_Group"] = df_bdb["kdCust_clean"].isin(map_pem_code)
-            del df_group
         else:
             df_bdb["Kd_Pemilik"], df_bdb["Nama_Pemilik"], df_bdb["Is_Group"] = df_bdb["kdCust_clean"], df_bdb["cust"], False
     else:
@@ -277,7 +271,6 @@ def load_data_from_github():
     df_bdb["search_code"] = df_bdb["Kd_Pemilik"]
     df_bdb["search_name"] = df_bdb.apply(lambda r: f"{r['Nama_Pemilik']} ( Grouping )" if r["Is_Group"] else r["cust"], axis=1)
     
-    gc.collect() # Bersihkan RAM setelah loading selesai
     return df_bdb
 
 # --- FUNGSI FORMATTER ---
@@ -298,7 +291,7 @@ def format_month_label(bln_code):
     prefix = str(bln_code)[:3].upper()
     return f"{months_map.get(prefix, prefix)} 2026" if "26" in str(bln_code) else months_map.get(prefix, prefix)
 
-# --- FUNGSI AGREGASI AMAN ---
+# --- FUNGSI AGREGASI ---
 def aggregate_store_rows(sub_df):
     first_row = sub_df.iloc[0].copy()
     if len(sub_df) == 1:
@@ -416,10 +409,18 @@ if page == "cek_omset":
         st.markdown("<br>", unsafe_allow_html=True)
 
         toko_df = df_filtered[["search_code", "search_name"]].drop_duplicates()
-        toko_options = (toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique()
+        
+        # PENGEMBALIAN KE MULTISELECT BAWAAN AGAR TIDAK HANG/MACET
+        toko_options = list((toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique())
 
         st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🔍 Cari Toko</div>", unsafe_allow_html=True)
-        selected_tokos = st.multiselect("label_toko", options=list(toko_options), max_selections=5, placeholder="Ketik Kode / Nama Toko (Atau Toko Grouping)...", label_visibility="collapsed")
+        selected_tokos = st.multiselect(
+            "label_toko", 
+            options=toko_options, 
+            max_selections=5, 
+            placeholder="Ketik Kode / Nama Toko (Atau Toko Grouping)...", 
+            label_visibility="collapsed"
+        )
 
         bln_list = ["JAN26", "FEB26", "MAR26", "APR26", "MEI26", "JUN26", "JUL26", "AGT26", "SEP26", "OKT26"]
 
@@ -516,41 +517,34 @@ elif page == "lintas_divisi":
     if sel_wilayah != "SEMUA WILAYAH": 
         mask &= (df['wilayah'] == sel_wilayah).to_numpy()
 
-    # Fungsi penarik array yang aman dan super hemat memori
     def get_num_arr(col_name):
         if col_name in df.columns:
             return pd.to_numeric(df[col_name], errors='coerce').fillna(0.0).to_numpy()
         return np.zeros(len(df))
 
-    # Syarat: Belum Transaksi AB4 (Jul-Sep = 0)
     jul_ab4 = get_num_arr('JUL26_AB4')
     agt_ab4 = get_num_arr('AGT26_AB4')
     sep_ab4 = get_num_arr('SEP26_AB4')
     
     mask &= (jul_ab4 == 0) & (agt_ab4 == 0) & (sep_ab4 == 0)
 
-    # Kalkulasi Max Omset Lintas Divisi 
     jul_div = get_num_arr(f'JUL26_{sel_divisi}')
     agt_div = get_num_arr(f'AGT26_{sel_divisi}')
     sep_div = get_num_arr(f'SEP26_{sel_divisi}')
     
     max_omset = np.maximum(np.maximum(jul_div, agt_div), sep_div)
 
-    # Filter Strata
     if sel_omset == "1JT UP": mask &= (max_omset >= 1.0)
     elif sel_omset == "5JT UP": mask &= (max_omset >= 5.0)
     elif sel_omset == "10JT UP": mask &= (max_omset >= 10.0)
     elif sel_omset == "40JT UP": mask &= (max_omset >= 40.0)
 
-    # Ambil index data yang valid saja (RAM 0%)
     valid_indices = np.where(mask)[0]
     
-    # Sorting Index
     valid_max_omsets = max_omset[valid_indices]
-    sorted_order = np.argsort(-valid_max_omsets) # Urut terbesar ke terkecil
+    sorted_order = np.argsort(-valid_max_omsets)
     sorted_indices = valid_indices[sorted_order]
 
-    # --- PAGINATION ---
     total_items = len(sorted_indices)
     items_per_page = 25
     total_pages = math.ceil(total_items / items_per_page) if total_items > 0 else 1
@@ -562,7 +556,6 @@ elif page == "lintas_divisi":
     start_idx = (st.session_state.page_lintas - 1) * items_per_page
     end_idx = start_idx + items_per_page
     
-    # Render persis 25 baris saja, tidak meng-copy DF jutaan baris
     page_indices = sorted_indices[start_idx:end_idx]
     df_page = df.iloc[page_indices]
 
@@ -641,7 +634,6 @@ elif page == "lintas_divisi":
         tbody_html += "<tr>"
         tbody_html += f"<td class='td-left'>{row.get('depo', '-')}</td>"
         
-        # Ambil kdCust dari orig yang tersimpan (atau dari clean jika missing)
         kd_val = row.get('kdCust_orig', row.get('kdCust_clean', '-'))
         tbody_html += f"<td class='td-left'>{kd_val}</td>"
         tbody_html += f"<td class='td-left'><b>{row.get('cust', '-')}</b></td>"
