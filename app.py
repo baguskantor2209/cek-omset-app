@@ -3,12 +3,12 @@ import os
 import math
 import traceback
 import requests
+import gc
 from datetime import datetime, timezone
 import pytz
 import pandas as pd
 import numpy as np
 import streamlit as st
-import streamlit.components.v1 as components
 
 # Custom Import untuk Export PDF
 from reportlab.lib import colors
@@ -25,7 +25,7 @@ from reportlab.platypus import (
 
 st.set_page_config(page_title="Bagus SDA AB4", layout="wide", page_icon="📊")
 
-# Custom CSS + RESPONSIVE MEDIA QUERIES
+# --- Custom CSS + RESPONSIVE MEDIA QUERIES (Tanpa Assistive Touch) ---
 st.markdown(
     """<style>
 header { visibility: hidden !important; height: 0px !important; display: none !important; }
@@ -90,90 +90,11 @@ label[data-baseweb="radio"] { display: none; }
     .metric-title { font-size: 0.7rem !important; }
     .metric-subtitle { font-size: 0.75rem !important; }
     .filter-label { font-size: 13px !important; margin-bottom: 2px !important; }
-    .assistive-touch-container { left: 15px !important; bottom: 15px !important; }
-    .at-button { width: 48px !important; height: 48px !important; }
-    .at-button::after { width: 32px !important; height: 32px !important; border-width: 2.5px !important; }
-    .at-button::before { width: 20px !important; height: 20px !important; }
-    .at-menu { left: 0; bottom: 60px !important; width: 200px !important; }
-    .at-item { padding: 10px 14px !important; font-size: 13px !important; }
 }
 </style>""", unsafe_allow_html=True)
 
-# --- ASSISTIVE TOUCH ---
-assistive_touch_html = """
-<style>
-.assistive-touch-container { position: fixed; bottom: 35px; left: 35px; z-index: 999999; font-family: 'Segoe UI', Arial, sans-serif; }
-.at-checkbox { display: none; }
-.at-button {
-    width: 60px; height: 60px; background: linear-gradient(135deg, #7dd3fc, #3b82f6); border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; cursor: pointer;
-    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border: 2px solid rgba(255,255,255,0.6); transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-}
-.at-button::after { content: ""; width: 42px; height: 42px; border-radius: 50%; border: 3.5px solid rgba(255,255,255,0.9); box-sizing: border-box; transition: all 0.4s; }
-.at-button::before { content: ""; width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.9); position: absolute; transition: all 0.4s; }
-.at-menu {
-    position: absolute; bottom: 75px; left: 0; background: rgba(255, 255, 255, 0.95); border-radius: 16px; padding: 10px; width: 230px;
-    display: flex; flex-direction: column; gap: 8px; opacity: 0; visibility: hidden;
-    transform: scale(0.5) translateY(30px) rotate(-90deg); transform-origin: bottom left; 
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.15); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(0,0,0,0.1);
-}
-.at-checkbox:checked ~ .at-menu { opacity: 1; visibility: visible; transform: scale(1) translateY(0) rotate(0deg); }
-.at-checkbox:checked ~ .at-button { transform: scale(0.95) rotate(360deg); box-shadow: 0 4px 15px rgba(59, 130, 246, 0.6); }
-.at-checkbox:checked ~ .at-button::after, .at-checkbox:checked ~ .at-button::before { opacity: 0.7; }
-.at-item {
-    padding: 14px 16px; border-radius: 12px; background: #ffffff; color: #1f2937 !important; text-decoration: none !important;
-    font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 12px; transition: all 0.2s ease; border: 1px solid #f3f4f6; box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-}
-.at-item:hover { background: #f8fafc; transform: scale(1.02); color: #2563eb !important; border-color: #bfdbfe; }
-</style>
-<div class="assistive-touch-container" id="at-container">
-    <input type="checkbox" id="at-toggle" class="at-checkbox">
-    <div class="at-menu">
-        <a href="?page=cek_omset" target="_self" class="at-item" onclick="document.getElementById('at-toggle').checked = false;">📊 Cek Omset Toko</a>
-        <a href="?page=lintas_divisi" target="_self" class="at-item" onclick="document.getElementById('at-toggle').checked = false;">🔄 Toko Lintas Divisi</a>
-    </div>
-    <label for="at-toggle" class="at-button" id="at-handle"></label>
-</div>
-"""
-st.markdown(assistive_touch_html, unsafe_allow_html=True)
 
-draggable_js = """<script>
-    const doc = window.parent.document; const container = doc.getElementById('at-container'); const handle = doc.getElementById('at-handle');
-    if (container && handle && !container.dataset.dragReady) {
-        container.dataset.dragReady = 'true'; let isDragging = false; let hasMoved = false; let startX, startY, initialLeft, initialTop;
-        const savedLeft = localStorage.getItem('at-left'); const savedTop = localStorage.getItem('at-top');
-        if (savedLeft && savedTop) { container.style.left = savedLeft; container.style.top = savedTop; container.style.bottom = 'auto'; }
-        function onMouseDown(e) {
-            isDragging = false; hasMoved = false;
-            if (e.type === 'touchstart') { startX = e.touches[0].clientX; startY = e.touches[0].clientY; } else { startX = e.clientX; startY = e.clientY; }
-            const rect = container.getBoundingClientRect(); initialLeft = rect.left; initialTop = rect.top;
-            doc.addEventListener('mousemove', onMouseMove); doc.addEventListener('mouseup', onMouseUp);
-            doc.addEventListener('touchmove', onMouseMove, {passive: false}); doc.addEventListener('touchend', onMouseUp);
-        }
-        function onMouseMove(e) {
-            let currentX, currentY;
-            if (e.type === 'touchmove') { currentX = e.touches[0].clientX; currentY = e.touches[0].clientY; } else { currentX = e.clientX; currentY = e.clientY; }
-            const dx = currentX - startX; const dy = currentY - startY;
-            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-                isDragging = true; hasMoved = true; e.preventDefault(); 
-                container.style.left = (initialLeft + dx) + 'px'; container.style.top = (initialTop + dy) + 'px'; container.style.bottom = 'auto';
-            }
-        }
-        function onMouseUp(e) {
-            doc.removeEventListener('mousemove', onMouseMove); doc.removeEventListener('mouseup', onMouseUp);
-            doc.removeEventListener('touchmove', onMouseMove); doc.removeEventListener('touchend', onMouseUp);
-            if (hasMoved) { localStorage.setItem('at-left', container.style.left); localStorage.setItem('at-top', container.style.top); }
-            setTimeout(() => { isDragging = false; }, 50);
-        }
-        handle.addEventListener('click', (e) => { if (hasMoved) { e.preventDefault(); } });
-        handle.addEventListener('mousedown', onMouseDown); handle.addEventListener('touchstart', onMouseDown, {passive: false});
-    }
-</script>"""
-components.html(draggable_js, height=0, width=0)
-
-# --- FUNGSI LOAD DATA (KEMBALI KE NORMAL, AMAN DARI HANG) ---
+# --- FUNGSI LOAD DATA ---
 @st.cache_data(ttl=300, show_spinner=False) 
 def get_github_last_updated():
     url = "https://api.github.com/repos/baguskantor2209/cek-omset-app/commits?path=BDB_AB4.parquet&page=1&per_page=1"
@@ -271,6 +192,7 @@ def load_data_from_github():
     df_bdb["search_code"] = df_bdb["Kd_Pemilik"]
     df_bdb["search_name"] = df_bdb.apply(lambda r: f"{r['Nama_Pemilik']} ( Grouping )" if r["Is_Group"] else r["cust"], axis=1)
     
+    gc.collect() 
     return df_bdb
 
 # --- FUNGSI FORMATTER ---
@@ -291,7 +213,6 @@ def format_month_label(bln_code):
     prefix = str(bln_code)[:3].upper()
     return f"{months_map.get(prefix, prefix)} 2026" if "26" in str(bln_code) else months_map.get(prefix, prefix)
 
-# --- FUNGSI AGREGASI ---
 def aggregate_store_rows(sub_df):
     first_row = sub_df.iloc[0].copy()
     if len(sub_df) == 1:
@@ -373,10 +294,11 @@ def generate_pdf_multi_toko(rows_list, bln_list):
 # MAIN APP EXECUTION (ROUTING HALAMAN)
 # ==========================================
 
-query_params = st.query_params
-page = query_params.get("page", "cek_omset")
+# --- GANTI ASSISTIVE TOUCH DENGAN SIDEBAR BAAWAAN ---
+st.sidebar.title("🧭 Navigasi Menu")
+page = st.sidebar.radio("Pilih Halaman:", ["📊 Cek Omset Toko", "🔄 Toko Lintas Divisi"])
 
-if page == "cek_omset":
+if page == "📊 Cek Omset Toko":
     # ----------------------------------------------------
     # HALAMAN 1: DASHBOARD CEK OMSET TOKO
     # ----------------------------------------------------
@@ -399,9 +321,15 @@ if page == "cek_omset":
         else: list_wilayah = []
             
         list_wilayah.insert(0, "SEMUA WILAYAH")
+
+        def reset_toko():
+            st.session_state.saved_tokos = []
+            
+        if "saved_tokos" not in st.session_state:
+            st.session_state.saved_tokos = []
         
         st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🌍 Filter By Wilayah</div>", unsafe_allow_html=True)
-        selected_wilayah = st.selectbox("label_wilayah", options=list_wilayah, label_visibility="collapsed")
+        selected_wilayah = st.selectbox("label_wilayah", options=list_wilayah, label_visibility="collapsed", on_change=reset_toko)
 
         if selected_wilayah != "SEMUA WILAYAH": df_filtered = df[df["wilayah"] == selected_wilayah]
         else: df_filtered = df
@@ -409,18 +337,35 @@ if page == "cek_omset":
         st.markdown("<br>", unsafe_allow_html=True)
 
         toko_df = df_filtered[["search_code", "search_name"]].drop_duplicates()
-        
-        # PENGEMBALIAN KE MULTISELECT BAWAAN AGAR TIDAK HANG/MACET
         toko_options = list((toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique())
 
-        st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🔍 Cari Toko</div>", unsafe_allow_html=True)
+        # --- SOLUSI ANTI HANG ANDROID (Sistem Pencarian 2 Tahap) ---
+        st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🔍 Cari Toko (Mode Anti-Hang HP)</div>", unsafe_allow_html=True)
+        
+        search_kw = st.text_input("lbl_cari", placeholder="1. Ketik Kode/Nama Toko di sini (Minimal 3 Huruf)...", label_visibility="collapsed")
+        
+        filtered_options = []
+        if len(search_kw) >= 3:
+            kw_lower = search_kw.lower()
+            filtered_options = [opt for opt in toko_options if kw_lower in opt.lower()]
+        elif len(search_kw) > 0:
+            st.caption("⚠️ Teruskan mengetik minimal 3 huruf agar toko bisa ditampilkan...")
+
+        valid_saved_tokos = [t for t in st.session_state.saved_tokos if t in toko_options]
+        st.session_state.saved_tokos = valid_saved_tokos
+        
+        display_options = sorted(list(set(filtered_options + valid_saved_tokos)))
+
         selected_tokos = st.multiselect(
-            "label_toko", 
-            options=toko_options, 
-            max_selections=5, 
-            placeholder="Ketik Kode / Nama Toko (Atau Toko Grouping)...", 
+            "lbl_pilih",
+            options=display_options,
+            default=valid_saved_tokos,
+            max_selections=5,
+            placeholder="2. Klik di sini untuk memilih Toko yang dicari..." if len(search_kw) >= 3 else "Ketik kata kunci di atas terlebih dahulu...",
             label_visibility="collapsed"
         )
+        st.session_state.saved_tokos = selected_tokos
+        # -------------------------------------------------------------
 
         bln_list = ["JAN26", "FEB26", "MAR26", "APR26", "MEI26", "JUN26", "JUL26", "AGT26", "SEP26", "OKT26"]
 
@@ -433,14 +378,15 @@ if page == "cek_omset":
                 row = aggregate_store_rows(sub_df)
                 selected_rows.append(row)
 
-                omset_okt26 = float(row.get("OKT26_AB4", 0) or 0)
-                rt225_ab4 = float(row.get("RT225_AB4", 0) or 0)
+                omset_okt26 = float(pd.to_numeric(row.get("OKT26_AB4", 0), errors='coerce') or 0)
+                rt225_ab4 = float(pd.to_numeric(row.get("RT225_AB4", 0), errors='coerce') or 0)
+                
                 diff_omset = omset_okt26 - rt225_ab4
                 pct_omset = (diff_omset / rt225_ab4 * 100) if rt225_ab4 > 0 else 0
                 status_arrow, status_color = ("▲", "#10b981") if diff_omset >= 0 else ("▼", "#ef4444")
 
                 jan_jun_cols = ["JAN26_AB4", "FEB26_AB4", "MAR26_AB4", "APR26_AB4", "MEI26_AB4", "JUN26_AB4"]
-                sm1_26_total = sum(float(row.get(m, 0) or 0) for m in jan_jun_cols)
+                sm1_26_total = sum(float(pd.to_numeric(row.get(m, 0), errors='coerce') or 0) for m in jan_jun_cols)
                 sm1_26_avg = sm1_26_total / 6.0
                 
                 diff_sm1 = omset_okt26 - sm1_26_avg
@@ -449,7 +395,7 @@ if page == "cek_omset":
 
                 max_val, max_month_code = -1.0, "OKT26"
                 for b in bln_list:
-                    val = float(row.get(f"{b}_AB4", 0) or 0)
+                    val = float(pd.to_numeric(row.get(f"{b}_AB4", 0), errors='coerce') or 0)
                     if val > max_val: max_val, max_month_code = val, b
 
                 c1, c2 = st.columns([1, 1])
@@ -470,14 +416,12 @@ if page == "cek_omset":
             col_pdf1, col_pdf2, col_pdf3 = st.columns([1, 2, 1])
             with col_pdf2:
                 st.download_button(label=f"📄 Export / Download PDF ({len(selected_tokos)} Toko)", data=pdf_bytes, file_name=f"Laporan_Omset_MultiToko_{len(selected_tokos)}_Toko.pdf", mime="application/pdf", use_container_width=True)
-        else:
-            st.info("💡 Silakan ketik atau pilih toko pada pencarian di atas.")
 
     except Exception as e:
         st.error("🚨 TERJADI KESALAHAN PADA APLIKASI:")
         st.code(traceback.format_exc(), language="bash")
 
-elif page == "lintas_divisi":
+elif page == "🔄 Toko Lintas Divisi":
     # ----------------------------------------------------
     # HALAMAN 2: TOKO LINTAS DIVISI
     # ----------------------------------------------------
@@ -511,7 +455,7 @@ elif page == "lintas_divisi":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- ZERO-COPY MEMORY ENGINE (DIJAMIN TIDAK OOM) ---
+    # --- ZERO-COPY MEMORY ENGINE ---
     mask = np.ones(len(df), dtype=bool)
 
     if sel_wilayah != "SEMUA WILAYAH": 
