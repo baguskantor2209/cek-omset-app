@@ -9,6 +9,7 @@ import pytz
 import pandas as pd
 import numpy as np
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Custom Import untuk Export PDF
 from reportlab.lib import colors
@@ -294,8 +295,9 @@ def generate_pdf_multi_toko(rows_list, bln_list):
     buffer.seek(0)
     return buffer
 
+
 # ==========================================
-# MAIN APP EXECUTION (SINGLE PAGE, CASCADING FILTER)
+# MAIN APP EXECUTION (CEK OMSET TOKO SAJA)
 # ==========================================
 try:
     st.markdown(f"""
@@ -339,12 +341,11 @@ try:
         else:
             df_depo = df_wilayah[df_wilayah["depo"] == selected_depo]
             
-            # --- 3. FILTER TOKO (HANYA TOKO DI DEPO TERSEBUT, ANTI HANG) ---
+            # --- 3. FILTER TOKO ---
             st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px; margin-top: 15px;'>3️⃣ Cari & Pilih Toko</div>", unsafe_allow_html=True)
             toko_df = df_depo[["search_code", "search_name"]].drop_duplicates()
             toko_options = list((toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique())
 
-            # Kita pakai multiselect murni tanpa 2 input lagi
             selected_tokos = st.multiselect(
                 "label_toko",
                 options=toko_options,
@@ -352,6 +353,32 @@ try:
                 placeholder="Pilih atau ketik nama Toko...",
                 label_visibility="collapsed"
             )
+
+            # --- SCRIPT AUTO-CLOSE DROPDOWN ---
+            # Mengakali bawaan Streamlit yang selalu membuka dropdown setelah memilih
+            components.html(
+                """
+                <script>
+                // Memberikan sedikit waktu agar Streamlit merender halaman setelah pilihan di-klik
+                setTimeout(function() {
+                    const doc = window.parent.document;
+                    if (doc) {
+                        const inputs = doc.querySelectorAll('input');
+                        inputs.forEach(input => input.blur());
+                    }
+                }, 100);
+                setTimeout(function() {
+                    const doc = window.parent.document;
+                    if (doc) {
+                        const inputs = doc.querySelectorAll('input');
+                        inputs.forEach(input => input.blur());
+                    }
+                }, 300);
+                </script>
+                """,
+                height=0, width=0
+            )
+            # ----------------------------------
 
             st.markdown("<br>", unsafe_allow_html=True)
             bln_list = ["JAN26", "FEB26", "MAR26", "APR26", "MEI26", "JUN26", "JUL26", "AGT26", "SEP26", "OKT26"]
