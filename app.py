@@ -153,7 +153,6 @@ def load_data_from_github():
     else:
         df_bdb["wilayah"] = "LAINNYA"
 
-    # LOGIKA GROUPING
     group_candidates = ["Grouping_Toko.parquet", "Grouping_Toko.csv", "Grouping_Toko.xlsx", "Grouping Toko.xlsx"]
     target_group = next((f for f in group_candidates if os.path.exists(f)), None)
 
@@ -295,7 +294,7 @@ def generate_pdf_multi_toko(rows_list, bln_list):
     return buffer
 
 # ==========================================
-# MAIN APP EXECUTION (SINGLE PAGE, CASCADING FILTER)
+# MAIN APP EXECUTION (CEK OMSET TOKO SAJA)
 # ==========================================
 try:
     st.markdown(f"""
@@ -307,11 +306,20 @@ try:
     </div>
     """, unsafe_allow_html=True)
 
+    # INISIALISASI STATE (Untuk Fitur Auto-Close Dropdown)
+    if "ms_toko" not in st.session_state:
+        st.session_state.ms_toko = []
+    if "search_input_val" not in st.session_state:
+        st.session_state.search_input_val = ""
+
+    def reset_toko():
+        st.session_state.ms_toko = []
+        st.session_state.search_input_val = ""
+
     with st.spinner("⚡ Memuat database & Sinkronisasi Grouping Toko..."):
         df = load_data_from_github()
 
     # --- 1. FILTER WILAYAH ---
-    st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>1️⃣ Pilih Wilayah</div>", unsafe_allow_html=True)
     if "wilayah" in df.columns:
         list_wilayah = sorted([str(w) for w in df["wilayah"].unique() if str(w) not in ["LAINNYA", "nan"]])
         if "LAINNYA" in [str(w) for w in df["wilayah"].unique()]: list_wilayah.append("LAINNYA")
@@ -320,36 +328,60 @@ try:
         
     list_wilayah.insert(0, "-- PILIH WILAYAH --")
     
-    selected_wilayah = st.selectbox("label_wilayah", options=list_wilayah, label_visibility="collapsed")
+    st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>1️⃣ Pilih Wilayah</div>", unsafe_allow_html=True)
+    selected_wilayah = st.selectbox("label_wilayah", options=list_wilayah, label_visibility="collapsed", on_change=reset_toko)
 
     if selected_wilayah == "-- PILIH WILAYAH --":
         st.info("👆 Silakan pilih Wilayah terlebih dahulu untuk memunculkan daftar Depo.")
     else:
         df_wilayah = df[df["wilayah"] == selected_wilayah]
         
-        # --- 2. FILTER DEPO (HANYA MUNCUL JIKA WILAYAH DIPILIH) ---
+        # --- 2. FILTER DEPO ---
         st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px; margin-top: 15px;'>2️⃣ Pilih Depo</div>", unsafe_allow_html=True)
         list_depo = sorted([str(d) for d in df_wilayah["depo"].unique() if str(d) != "nan"])
         list_depo.insert(0, "-- PILIH DEPO --")
         
-        selected_depo = st.selectbox("label_depo", options=list_depo, label_visibility="collapsed")
+        selected_depo = st.selectbox("label_depo", options=list_depo, label_visibility="collapsed", on_change=reset_toko)
         
         if selected_depo == "-- PILIH DEPO --":
             st.info("👆 Silakan pilih Depo untuk memunculkan daftar Toko.")
         else:
             df_depo = df_wilayah[df_wilayah["depo"] == selected_depo]
             
-            # --- 3. FILTER TOKO (HANYA TOKO DI DEPO TERSEBUT, ANTI HANG) ---
+            # --- 3. FILTER TOKO (ANTI HANG + AUTO CLOSE) ---
             st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px; margin-top: 15px;'>3️⃣ Cari & Pilih Toko</div>", unsafe_allow_html=True)
+            
             toko_df = df_depo[["search_code", "search_name"]].drop_duplicates()
             toko_options = list((toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique())
 
+            # Text input untuk saringan (menyimpan state)
+            search_kw = st.text_input("lbl_cari", key="search_input_val", placeholder="1. Ketik Kode/Nama Toko di sini (Minimal 3 Huruf)...", label_visibility="collapsed")
+            
+            filtered_options = []
+            if len(search_kw) >= 3:
+                kw_lower = search_kw.lower()
+                filtered_options = [opt for opt in toko_options if kw_lower in opt.lower()]
+            elif len(search_kw) > 0:
+                st.caption("⚠️ Teruskan mengetik minimal 3 huruf agar toko bisa ditampilkan...")
+
+            # Pastikan toko yang tersimpan masih ditaruh di dalam opsi (agar tidak hilang dari UI)
+            valid_saved_tokos = [t for t in st.session_state.ms_toko if t in toko_options]
+            display_options = sorted(list(set(filtered_options + valid_saved_tokos)))
+
+            # Fungsi pemicu saat toko dipilih
+            def on_toko_select():
+                # Hapus teks pencarian seketika agar dropdown langsung tertutup (auto-hide)
+                st.session_state.search_input_val = ""
+
+            # Kotak Dropdown (Hanya berisi hasil yang relevan, tidak berat di HP)
             selected_tokos = st.multiselect(
-                "label_toko",
-                options=toko_options,
+                "lbl_pilih",
+                options=display_options,
                 max_selections=5,
-                placeholder="Pilih atau ketik nama Toko...",
-                label_visibility="collapsed"
+                placeholder="2. Klik di sini untuk memilih Toko yang dicari..." if len(search_kw) >= 3 else "Ketik kata kunci di atas terlebih dahulu...",
+                label_visibility="collapsed",
+                key="ms_toko",
+                on_change=on_toko_select
             )
 
             st.markdown("<br>", unsafe_allow_html=True)
