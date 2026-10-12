@@ -25,7 +25,7 @@ from reportlab.platypus import (
 
 st.set_page_config(page_title="Bagus SDA AB4", layout="wide", page_icon="📊")
 
-# --- Custom CSS + RESPONSIVE MEDIA QUERIES (Tanpa Assistive Touch) ---
+# --- Custom CSS + RESPONSIVE MEDIA QUERIES ---
 st.markdown(
     """<style>
 header { visibility: hidden !important; height: 0px !important; display: none !important; }
@@ -184,6 +184,7 @@ def load_data_from_github():
             df_bdb["Kd_Pemilik"] = df_bdb["kdCust_clean"].map(map_pem_code).fillna(df_bdb["kdCust_clean"])
             df_bdb["Nama_Pemilik"] = df_bdb["kdCust_clean"].map(map_pem_name).fillna(df_bdb["cust"])
             df_bdb["Is_Group"] = df_bdb["kdCust_clean"].isin(map_pem_code)
+            del df_group
         else:
             df_bdb["Kd_Pemilik"], df_bdb["Nama_Pemilik"], df_bdb["Is_Group"] = df_bdb["kdCust_clean"], df_bdb["cust"], False
     else:
@@ -196,17 +197,20 @@ def load_data_from_github():
     return df_bdb
 
 # --- FUNGSI FORMATTER ---
-def f_num(val):
+def safe_float(val):
     try:
         v = float(val)
-        return "-" if math.isnan(v) or v == 0 else f"{v:,.0f}"
-    except: return "-"
+        return 0.0 if math.isnan(v) else v
+    except:
+        return 0.0
+
+def f_num(val):
+    v = safe_float(val)
+    return "-" if v == 0 else f"{v:,.0f}"
 
 def f_dec(val):
-    try:
-        v = float(val)
-        return "-" if math.isnan(v) or v == 0 else f"{v:,.1f}"
-    except: return "-"
+    v = safe_float(val)
+    return "-" if v == 0 else f"{v:,.1f}"
 
 def format_month_label(bln_code):
     months_map = { "JAN": "Januari", "FEB": "Februari", "MAR": "Maret", "APR": "April", "MEI": "Mei", "JUN": "Juni", "JUL": "Juli", "AGT": "Agustus", "SEP": "September", "OKT": "Oktober"}
@@ -291,325 +295,114 @@ def generate_pdf_multi_toko(rows_list, bln_list):
     return buffer
 
 # ==========================================
-# MAIN APP EXECUTION (ROUTING HALAMAN)
+# MAIN APP EXECUTION (SINGLE PAGE, CASCADING FILTER)
 # ==========================================
-
-# --- GANTI ASSISTIVE TOUCH DENGAN SIDEBAR BAAWAAN ---
-st.sidebar.title("🧭 Navigasi Menu")
-page = st.sidebar.radio("Pilih Halaman:", ["📊 Cek Omset Toko", "🔄 Toko Lintas Divisi"])
-
-if page == "📊 Cek Omset Toko":
-    # ----------------------------------------------------
-    # HALAMAN 1: DASHBOARD CEK OMSET TOKO
-    # ----------------------------------------------------
-    try:
-        st.markdown(f"""
-        <div class="header-container" style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 20px;">
-            <h1 class="custom-title" style="margin: 0; padding: 0; font-size: 2.2rem; color: #111827;">📊 Dashboard Cek Omset Toko</h1>
-            <div class="last-updated" style="color: #4b5563; font-size: 14px; font-weight: 500;">
-                🕘 Last Updated : <span style='color: #2563eb; font-weight: bold;'>{get_github_last_updated()}</span>
-            </div>
+try:
+    st.markdown(f"""
+    <div class="header-container" style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 20px;">
+        <h1 class="custom-title" style="margin: 0; padding: 0; font-size: 2.2rem; color: #111827;">📊 Dashboard Cek Omset Toko</h1>
+        <div class="last-updated" style="color: #4b5563; font-size: 14px; font-weight: 500;">
+            🕘 Last Updated : <span style='color: #2563eb; font-weight: bold;'>{get_github_last_updated()}</span>
         </div>
-        """, unsafe_allow_html=True)
-
-        with st.spinner("⚡ Memuat database & Sinkronisasi Grouping Toko..."):
-            df = load_data_from_github()
-
-        if "wilayah" in df.columns:
-            list_wilayah = sorted([str(w) for w in df["wilayah"].unique() if str(w) != "LAINNYA"])
-            if "LAINNYA" in [str(w) for w in df["wilayah"].unique()]: list_wilayah.append("LAINNYA")
-        else: list_wilayah = []
-            
-        list_wilayah.insert(0, "SEMUA WILAYAH")
-
-        def reset_toko():
-            st.session_state.saved_tokos = []
-            
-        if "saved_tokos" not in st.session_state:
-            st.session_state.saved_tokos = []
-        
-        st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🌍 Filter By Wilayah</div>", unsafe_allow_html=True)
-        selected_wilayah = st.selectbox("label_wilayah", options=list_wilayah, label_visibility="collapsed", on_change=reset_toko)
-
-        if selected_wilayah != "SEMUA WILAYAH": df_filtered = df[df["wilayah"] == selected_wilayah]
-        else: df_filtered = df
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        toko_df = df_filtered[["search_code", "search_name"]].drop_duplicates()
-        toko_options = list((toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique())
-
-        # --- SOLUSI ANTI HANG ANDROID (Sistem Pencarian 2 Tahap) ---
-        st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>🔍 Cari Toko (Mode Anti-Hang HP)</div>", unsafe_allow_html=True)
-        
-        search_kw = st.text_input("lbl_cari", placeholder="1. Ketik Kode/Nama Toko di sini (Minimal 3 Huruf)...", label_visibility="collapsed")
-        
-        filtered_options = []
-        if len(search_kw) >= 3:
-            kw_lower = search_kw.lower()
-            filtered_options = [opt for opt in toko_options if kw_lower in opt.lower()]
-        elif len(search_kw) > 0:
-            st.caption("⚠️ Teruskan mengetik minimal 3 huruf agar toko bisa ditampilkan...")
-
-        valid_saved_tokos = [t for t in st.session_state.saved_tokos if t in toko_options]
-        st.session_state.saved_tokos = valid_saved_tokos
-        
-        display_options = sorted(list(set(filtered_options + valid_saved_tokos)))
-
-        selected_tokos = st.multiselect(
-            "lbl_pilih",
-            options=display_options,
-            default=valid_saved_tokos,
-            max_selections=5,
-            placeholder="2. Klik di sini untuk memilih Toko yang dicari..." if len(search_kw) >= 3 else "Ketik kata kunci di atas terlebih dahulu...",
-            label_visibility="collapsed"
-        )
-        st.session_state.saved_tokos = selected_tokos
-        # -------------------------------------------------------------
-
-        bln_list = ["JAN26", "FEB26", "MAR26", "APR26", "MEI26", "JUN26", "JUL26", "AGT26", "SEP26", "OKT26"]
-
-        if selected_tokos:
-            selected_rows = []
-            for selected_toko in selected_tokos:
-                selected_code = selected_toko.split(" - ")[0].strip().upper()
-                sub_df = df[df["search_code"].astype(str).str.strip().str.upper() == selected_code]
-                
-                row = aggregate_store_rows(sub_df)
-                selected_rows.append(row)
-
-                omset_okt26 = float(pd.to_numeric(row.get("OKT26_AB4", 0), errors='coerce') or 0)
-                rt225_ab4 = float(pd.to_numeric(row.get("RT225_AB4", 0), errors='coerce') or 0)
-                
-                diff_omset = omset_okt26 - rt225_ab4
-                pct_omset = (diff_omset / rt225_ab4 * 100) if rt225_ab4 > 0 else 0
-                status_arrow, status_color = ("▲", "#10b981") if diff_omset >= 0 else ("▼", "#ef4444")
-
-                jan_jun_cols = ["JAN26_AB4", "FEB26_AB4", "MAR26_AB4", "APR26_AB4", "MEI26_AB4", "JUN26_AB4"]
-                sm1_26_total = sum(float(pd.to_numeric(row.get(m, 0), errors='coerce') or 0) for m in jan_jun_cols)
-                sm1_26_avg = sm1_26_total / 6.0
-                
-                diff_sm1 = omset_okt26 - sm1_26_avg
-                pct_sm1 = (diff_sm1 / sm1_26_avg * 100) if sm1_26_avg > 0 else 0
-                status_arrow_sm1, status_color_sm1 = ("▲", "#10b981") if diff_sm1 >= 0 else ("▼", "#ef4444")
-
-                max_val, max_month_code = -1.0, "OKT26"
-                for b in bln_list:
-                    val = float(pd.to_numeric(row.get(f"{b}_AB4", 0), errors='coerce') or 0)
-                    if val > max_val: max_val, max_month_code = val, b
-
-                c1, c2 = st.columns([1, 1])
-                with c1:
-                    st.markdown(f"""<div class="metric-card" style="border-left-color: #2563eb;"><div class="metric-title">REAL OMSET OKT 26 DIVISI AB4</div><div class="metric-value">Rp {omset_okt26:,.1f} Jt</div><div class="metric-subtitle" style="color: {status_color};">{status_arrow} {abs(pct_omset):,.1f}% vs RT2 25 ({diff_omset:+,.1f} Jt)</div><div class="metric-subtitle" style="color: {status_color_sm1}; margin-top: 5px;">{status_arrow_sm1} {abs(pct_sm1):,.1f}% vs SM1 26 ({diff_sm1:+,.1f} Jt)</div></div>""", unsafe_allow_html=True)
-                with c2:
-                    st.markdown(f"""<div class="metric-card" style="border-left-color: #06b6d4;"><div class="metric-title">OMSET TERBESAR DIVISI AB4</div><div class="metric-value" style="font-size: 1.25rem;">Puncak Omset Pada Bulan <b>{format_month_label(max_month_code)}</b></div><div class="metric-subtitle" style="color: #06b6d4;">Dengan Jumlah Omset Rp {max_val:,.1f} Jt</div></div>""", unsafe_allow_html=True)
-
-                def fmt_v(suf): return "".join([f"<td>{f_num(row.get(f'{b}_{suf}', 0))}</td>" for b in bln_list])
-                def fmt_raw(suf): return "".join([f"<td>{f_dec(row.get(f'{b}_{suf}', 0))}</td>" for b in bln_list])
-
-                table_html = f"""<div class="omset-table-container"><div style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">Depo : <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 4px;">{row.get('depo', '-')}</span><br>Kode Cust : <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 4px;">{row['search_code']}</span><br>Nama Toko : <b>{row['cust']}</b></div><table class="report-table"><thead><tr><th class="blue-header" style="width: 55px;">RT2 25</th><th class="blue-header" style="width: 55px;">SM2 25</th><th style="width: 25px;">No</th><th style="text-align: left;">KP</th><th style="width: 45px;">Satuan</th><th>JAN 26</th><th>FEB 26</th><th>MAR 26</th><th>APR 26</th><th>MEI 26</th><th>JUN 26</th><th>JUL 26</th><th>AGT 26</th><th>SEP 26</th><th>OKT 26</th></tr></thead><tbody><tr><td class="center">{f_num(row.get('RT225_TOR',0))}</td><td class="center">{f_num(row.get('SM225_TOR',0))}</td><td class="center bold-col">1</td><td class="left bold-col">TOR</td><td class="center">Krt</td>{fmt_v('TOR')}</tr><tr><td class="center">{f_num(row.get('RT225_UCV',0))}</td><td class="center">{f_num(row.get('SM225_UCV',0))}</td><td class="center bold-col">2</td><td class="left bold-col">UCV</td><td class="center">Krt</td>{fmt_v('UCV')}</tr><tr><td class="center">{f_num(row.get('RT225_KTD',0))}</td><td class="center">{f_num(row.get('SM225_KTD',0))}</td><td class="center bold-col">3</td><td class="left bold-col">KTD</td><td class="center">Krt</td>{fmt_v('KTD')}</tr><tr><td class="center">{f_num(row.get('RT225_RBL',0))}</td><td class="center">{f_num(row.get('SM225_RBL',0))}</td><td class="center bold-col">4</td><td class="left bold-col">RBLGOLD</td><td class="center">Krt</td>{fmt_v('RBL')}</tr><tr><td class="center">{f_num(row.get('RT225_UCW',0))}</td><td class="center">{f_num(row.get('SM225_UCW',0))}</td><td class="center bold-col">5</td><td class="left bold-col">UCW</td><td class="center">Krt</td>{fmt_v('UCW')}</tr><tr><td class="center">{f_num(row.get('RT225_ISO',0))}</td><td class="center">{f_num(row.get('SM225_ISO',0))}</td><td class="center bold-col">6</td><td class="left bold-col">ISO</td><td class="center">Krt</td>{fmt_v('ISO')}</tr><tr class="row-category"><td class="center">{f_dec(row.get('RT225_EDV',0))}</td><td class="center">{f_dec(row.get('SM225_EDV',0))}</td><td colspan="2" class="left bold-col" style="padding-left:10px;">ENERGY DRINK VITAMIN</td><td class="center">Jt Rp</td>{fmt_raw('EDV')}</tr><tr><td class="center">{f_num(row.get('RT225_CZLSN',0))}</td><td class="center">{f_num(row.get('SM225_CZLSN',0))}</td><td class="center bold-col">7</td><td class="left bold-col">CZ</td><td class="center">Lsn</td>{fmt_v('CZLSN')}</tr><tr><td class="center">{f_num(row.get('RT225_CZKRT',0))}</td><td class="center">{f_num(row.get('SM225_CZKRT',0))}</td><td class="center bold-col"></td><td class="left bold-col">CZ</td><td class="center">Krt</td>{fmt_v('CZKRT')}</tr><tr><td class="center">{f_num(row.get('RT225_R3',0))}</td><td class="center">{f_num(row.get('SM225_R3',0))}</td><td class="center bold-col"></td><td class="left bold-col">R3</td><td class="center">Krt</td>{fmt_v('R3')}</tr><tr><td class="center">{f_num(row.get('RT225_R06EXC',0))}</td><td class="center">{f_num(row.get('SM225_R06EXC',0))}</td><td class="center bold-col"></td><td class="left bold-col">R06</td><td class="center">Krt</td>{fmt_v('R06EXC')}</tr><tr><td class="center">{f_num(row.get('RT225_ALK',0))}</td><td class="center">{f_num(row.get('SM225_ALK',0))}</td><td class="center bold-col">8</td><td class="left bold-col">ALK</td><td class="center">Krt</td>{fmt_v('ALK')}</tr><tr><td class="center">{f_num(row.get('RT225_ALKREG',0))}</td><td class="center">{f_num(row.get('SM225_ALKREG',0))}</td><td class="center bold-col"></td><td class="left bold-col">ALK REG</td><td class="center">Krt</td>{fmt_v('ALKREG')}</tr><tr><td class="center">{f_num(row.get('RT225_ALKNONREG',0))}</td><td class="center">{f_num(row.get('SM225_ALKNONREG',0))}</td><td class="center bold-col"></td><td class="left bold-col">ALK NON REG</td><td class="center">Krt</td>{fmt_v('ALKNONREG')}</tr><tr><td class="center">{f_num(row.get('RT225_MAA',0))}</td><td class="center">{f_num(row.get('SM225_MAA',0))}</td><td class="center bold-col">9</td><td class="left bold-col">MAA</td><td class="center">Krt</td>{fmt_v('MAA')}</tr><tr class="row-category"><td class="center">{f_dec(row.get('RT225_HC',0))}</td><td class="center">{f_dec(row.get('SM225_HC',0))}</td><td colspan="2" class="left bold-col" style="padding-left:10px;">HOME CARE</td><td class="center">Jt Rp</td>{fmt_raw('HC')}</tr><tr class="row-total"><td class="center">{f_dec(row.get('RT225_AB4',0))}</td><td class="center">{f_dec(row.get('SM225_AB4',0))}</td><td colspan="2" class="left bold-col" style="padding-left:10px;">DIVISI AB4</td><td class="center">Jt Rp</td>{fmt_raw('AB4')}</tr></tbody></table></div>"""
-                try: st.html(table_html)
-                except AttributeError: st.markdown(table_html, unsafe_allow_html=True)
-
-            pdf_bytes = generate_pdf_multi_toko(selected_rows, bln_list)
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_pdf1, col_pdf2, col_pdf3 = st.columns([1, 2, 1])
-            with col_pdf2:
-                st.download_button(label=f"📄 Export / Download PDF ({len(selected_tokos)} Toko)", data=pdf_bytes, file_name=f"Laporan_Omset_MultiToko_{len(selected_tokos)}_Toko.pdf", mime="application/pdf", use_container_width=True)
-
-    except Exception as e:
-        st.error("🚨 TERJADI KESALAHAN PADA APLIKASI:")
-        st.code(traceback.format_exc(), language="bash")
-
-elif page == "🔄 Toko Lintas Divisi":
-    # ----------------------------------------------------
-    # HALAMAN 2: TOKO LINTAS DIVISI
-    # ----------------------------------------------------
-    st.markdown("""
-    <div class="header-container" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 20px;">
-        <h1 class="custom-title" style="margin: 0; padding: 0; font-size: 2.2rem; color: #111827;">🔄 Toko Lintas Divisi Belum Transaksi AB4</h1>
     </div>
     """, unsafe_allow_html=True)
-    
-    with st.spinner("⚡ Memuat database..."):
+
+    with st.spinner("⚡ Memuat database & Sinkronisasi Grouping Toko..."):
         df = load_data_from_github()
 
-    list_wilayah = ["SEMUA WILAYAH"]
+    # --- 1. FILTER WILAYAH ---
+    st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px;'>1️⃣ Pilih Wilayah</div>", unsafe_allow_html=True)
     if "wilayah" in df.columns:
-        w_opts = sorted([str(w) for w in df["wilayah"].unique() if str(w) != "LAINNYA"])
-        list_wilayah.extend(w_opts)
+        list_wilayah = sorted([str(w) for w in df["wilayah"].unique() if str(w) not in ["LAINNYA", "nan"]])
         if "LAINNYA" in [str(w) for w in df["wilayah"].unique()]: list_wilayah.append("LAINNYA")
-
-    def reset_page_lintas(): st.session_state.page_lintas = 1
-
-    c1, c2, c3 = st.columns(3)
-    with c1: 
-        st.markdown("<div class='filter-label' style='font-size:15px; font-weight:700; color:#1f2937; margin-bottom:4px;'>🌍 Wilayah</div>", unsafe_allow_html=True)
-        sel_wilayah = st.selectbox("lbl_w", list_wilayah, label_visibility="collapsed", on_change=reset_page_lintas)
-    with c2: 
-        st.markdown("<div class='filter-label' style='font-size:15px; font-weight:700; color:#1f2937; margin-bottom:4px;'>🏢 Divisi</div>", unsafe_allow_html=True)
-        sel_divisi = st.selectbox("lbl_d", ["AB2", "AB3"], label_visibility="collapsed", on_change=reset_page_lintas)
-    with c3: 
-        st.markdown("<div class='filter-label' style='font-size:15px; font-weight:700; color:#1f2937; margin-bottom:4px;'>💰 Strata</div>", unsafe_allow_html=True)
-        sel_omset = st.selectbox("lbl_s", ["Semua", "1JT UP", "5JT UP", "10JT UP", "40JT UP"], label_visibility="collapsed", on_change=reset_page_lintas)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # --- ZERO-COPY MEMORY ENGINE ---
-    mask = np.ones(len(df), dtype=bool)
-
-    if sel_wilayah != "SEMUA WILAYAH": 
-        mask &= (df['wilayah'] == sel_wilayah).to_numpy()
-
-    def get_num_arr(col_name):
-        if col_name in df.columns:
-            return pd.to_numeric(df[col_name], errors='coerce').fillna(0.0).to_numpy()
-        return np.zeros(len(df))
-
-    jul_ab4 = get_num_arr('JUL26_AB4')
-    agt_ab4 = get_num_arr('AGT26_AB4')
-    sep_ab4 = get_num_arr('SEP26_AB4')
+    else: 
+        list_wilayah = []
+        
+    list_wilayah.insert(0, "-- PILIH WILAYAH --")
     
-    mask &= (jul_ab4 == 0) & (agt_ab4 == 0) & (sep_ab4 == 0)
+    selected_wilayah = st.selectbox("label_wilayah", options=list_wilayah, label_visibility="collapsed")
 
-    jul_div = get_num_arr(f'JUL26_{sel_divisi}')
-    agt_div = get_num_arr(f'AGT26_{sel_divisi}')
-    sep_div = get_num_arr(f'SEP26_{sel_divisi}')
-    
-    max_omset = np.maximum(np.maximum(jul_div, agt_div), sep_div)
-
-    if sel_omset == "1JT UP": mask &= (max_omset >= 1.0)
-    elif sel_omset == "5JT UP": mask &= (max_omset >= 5.0)
-    elif sel_omset == "10JT UP": mask &= (max_omset >= 10.0)
-    elif sel_omset == "40JT UP": mask &= (max_omset >= 40.0)
-
-    valid_indices = np.where(mask)[0]
-    
-    valid_max_omsets = max_omset[valid_indices]
-    sorted_order = np.argsort(-valid_max_omsets)
-    sorted_indices = valid_indices[sorted_order]
-
-    total_items = len(sorted_indices)
-    items_per_page = 25
-    total_pages = math.ceil(total_items / items_per_page) if total_items > 0 else 1
-    
-    if "page_lintas" not in st.session_state: st.session_state.page_lintas = 1
-    if st.session_state.page_lintas > total_pages: st.session_state.page_lintas = 1
-    if st.session_state.page_lintas < 1: st.session_state.page_lintas = 1
-
-    start_idx = (st.session_state.page_lintas - 1) * items_per_page
-    end_idx = start_idx + items_per_page
-    
-    page_indices = sorted_indices[start_idx:end_idx]
-    df_page = df.iloc[page_indices]
-
-    def prev_page(): st.session_state.page_lintas -= 1
-    def next_page(): st.session_state.page_lintas += 1
-
-    pg_c1, pg_c2, pg_c3 = st.columns([1, 2, 1])
-    with pg_c1: st.button("⬅️ Previous", disabled=(st.session_state.page_lintas <= 1), on_click=prev_page, use_container_width=True)
-    with pg_c2: st.markdown(f"<div style='text-align: center; margin-top: 8px; font-weight: bold;'>Halaman {st.session_state.page_lintas} dari {total_pages} (Total: {total_items} Toko Ditemukan)</div>", unsafe_allow_html=True)
-    with pg_c3: st.button("Next ➡️", disabled=(st.session_state.page_lintas >= total_pages), on_click=next_page, use_container_width=True)
-
-    # --- HTML TABEL DENGAN KOLOM SPACER (PEMISAH) ---
-    def fmt_val(v): 
-        try:
-            val = float(v)
-            return "-" if math.isnan(val) or val == 0 else f"{val:,.1f}"
-        except: return "-"
-
-    thead_html = """<style>
-.tbl-ld { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; margin-top: 15px; margin-bottom: 25px; }
-.tbl-ld th, .tbl-ld td { border: 1px solid #111827; padding: 6px 4px; text-align: center; white-space: nowrap; }
-.bg-orange { background-color: #FFC000; color: #000; font-weight: 800; }
-.bg-yellow { background-color: #FFFF00; color: #000; font-weight: 800; }
-.bg-blue { background-color: #00B0F0; color: #000; font-weight: 800; }
-.bg-green { background-color: #92D050; color: #000; font-weight: 800; }
-.td-left { text-align: left !important; padding-left: 8px !important; }
-
-/* CSS UNTUK KOLOM PEMISAH (SPACER) */
-.col-spacer {
-    min-width: 15px !important; max-width: 15px !important; padding: 0 !important; margin: 0 !important;
-    background-color: #ffffff !important; border-top: none !important; border-bottom: none !important;
-    border-left: none !important; border-right: none !important;
-}
-
-.tbl-ld tbody tr:nth-child(even) { background-color: #f9fafb; }
-.tbl-ld tbody tr:hover { background-color: #e5e7eb; }
-.tbl-ld tbody tr:nth-child(even) .col-spacer { background-color: #ffffff !important; }
-.tbl-ld tbody tr:hover .col-spacer { background-color: #ffffff !important; }
-</style>
-
-<div class="omset-table-container">
-<table class="tbl-ld">
-    <thead>
-        <tr>
-            <th rowspan="2" class="bg-orange">DEPO</th>
-            <th rowspan="2" class="bg-orange">KD CUST</th>
-            <th rowspan="2" class="bg-orange" style="min-width: 200px;">NAMA CUST</th>
+    if selected_wilayah == "-- PILIH WILAYAH --":
+        st.info("👆 Silakan pilih Wilayah terlebih dahulu untuk memunculkan daftar Depo.")
+    else:
+        df_wilayah = df[df["wilayah"] == selected_wilayah]
+        
+        # --- 2. FILTER DEPO (HANYA MUNCUL JIKA WILAYAH DIPILIH) ---
+        st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px; margin-top: 15px;'>2️⃣ Pilih Depo</div>", unsafe_allow_html=True)
+        list_depo = sorted([str(d) for d in df_wilayah["depo"].unique() if str(d) != "nan"])
+        list_depo.insert(0, "-- PILIH DEPO --")
+        
+        selected_depo = st.selectbox("label_depo", options=list_depo, label_visibility="collapsed")
+        
+        if selected_depo == "-- PILIH DEPO --":
+            st.info("👆 Silakan pilih Depo untuk memunculkan daftar Toko.")
+        else:
+            df_depo = df_wilayah[df_wilayah["depo"] == selected_depo]
             
-            <th class="col-spacer" rowspan="2"></th> <!-- Spacer Kiri AB2 -->
-            <th colspan="6" class="bg-yellow">DIVISI AB2</th>
-            
-            <th class="col-spacer" rowspan="2"></th> <!-- Spacer Tengah AB3 -->
-            <th colspan="6" class="bg-orange">DIVISI AB3</th>
-            
-            <th class="col-spacer" rowspan="2"></th> <!-- Spacer Kanan AB4 -->
-            <th colspan="6" class="bg-blue">DIVISI AB4</th>
-        </tr>
-        <tr>
-            <!-- AB2 -->
-            <th class="bg-green">RT2 25</th><th class="bg-green">SM2 25</th>
-            <th class="bg-yellow">JUL 26</th><th class="bg-yellow">AGT 26</th><th class="bg-yellow">SEP 26</th><th class="bg-yellow">OKT 26</th>
-            
-            <!-- AB3 -->
-            <th class="bg-green">RT2 25</th><th class="bg-green">SM2 25</th>
-            <th class="bg-orange">JUL 26</th><th class="bg-orange">AGT 26</th><th class="bg-orange">SEP 26</th><th class="bg-orange">OKT 26</th>
-            
-            <!-- AB4 -->
-            <th class="bg-green">RT2 25</th><th class="bg-green">SM2 25</th>
-            <th class="bg-blue">JUL 26</th><th class="bg-blue">AGT 26</th><th class="bg-blue">SEP 26</th><th class="bg-blue">OKT 26</th>
-        </tr>
-    </thead>
-    <tbody>"""
-    
-    tbody_html = ""
-    for _, row in df_page.iterrows():
-        tbody_html += "<tr>"
-        tbody_html += f"<td class='td-left'>{row.get('depo', '-')}</td>"
-        
-        kd_val = row.get('kdCust_orig', row.get('kdCust_clean', '-'))
-        tbody_html += f"<td class='td-left'>{kd_val}</td>"
-        tbody_html += f"<td class='td-left'><b>{row.get('cust', '-')}</b></td>"
-        
-        # Spacer
-        tbody_html += "<td class='col-spacer'></td>"
-        
-        # AB2
-        tbody_html += f"<td>{fmt_val(row.get('RT225_AB2', 0))}</td><td>{fmt_val(row.get('SM225_AB2', 0))}</td>"
-        tbody_html += f"<td>{fmt_val(row.get('JUL26_AB2', 0))}</td><td>{fmt_val(row.get('AGT26_AB2', 0))}</td><td>{fmt_val(row.get('SEP26_AB2', 0))}</td><td>{fmt_val(row.get('OKT26_AB2', 0))}</td>"
-        
-        # Spacer
-        tbody_html += "<td class='col-spacer'></td>"
-        
-        # AB3
-        tbody_html += f"<td>{fmt_val(row.get('RT225_AB3', 0))}</td><td>{fmt_val(row.get('SM225_AB3', 0))}</td>"
-        tbody_html += f"<td>{fmt_val(row.get('JUL26_AB3', 0))}</td><td>{fmt_val(row.get('AGT26_AB3', 0))}</td><td>{fmt_val(row.get('SEP26_AB3', 0))}</td><td>{fmt_val(row.get('OKT26_AB3', 0))}</td>"
-        
-        # Spacer
-        tbody_html += "<td class='col-spacer'></td>"
-        
-        # AB4
-        tbody_html += f"<td>{fmt_val(row.get('RT225_AB4', 0))}</td><td>{fmt_val(row.get('SM225_AB4', 0))}</td>"
-        tbody_html += f"<td>{fmt_val(row.get('JUL26_AB4', 0))}</td><td>{fmt_val(row.get('AGT26_AB4', 0))}</td><td>{fmt_val(row.get('SEP26_AB4', 0))}</td><td>{fmt_val(row.get('OKT26_AB4', 0))}</td>"
-        
-        tbody_html += "</tr>"
-        
-    if total_items == 0: 
-        tbody_html += "<tr><td colspan='24' style='text-align:center; padding: 30px; font-weight: bold; color: #ef4444;'>TIDAK ADA DATA TOKO YANG MEMENUHI KRITERIA PENCARIAN INI</td></tr>"
-    
-    tfoot_html = "</tbody></table></div>"
-    
-    final_table = thead_html + tbody_html + tfoot_html
-    try: st.html(final_table)
-    except AttributeError: st.markdown(final_table, unsafe_allow_html=True)
+            # --- 3. FILTER TOKO (HANYA TOKO DI DEPO TERSEBUT, ANTI HANG) ---
+            st.markdown("<div class='filter-label' style='font-size:16px; font-weight:600; color:#1f2937; margin-bottom: 8px; margin-top: 15px;'>3️⃣ Cari & Pilih Toko</div>", unsafe_allow_html=True)
+            toko_df = df_depo[["search_code", "search_name"]].drop_duplicates()
+            toko_options = list((toko_df["search_code"].astype(str) + " - " + toko_df["search_name"].astype(str)).unique())
+
+            selected_tokos = st.multiselect(
+                "label_toko",
+                options=toko_options,
+                max_selections=5,
+                placeholder="Pilih atau ketik nama Toko...",
+                label_visibility="collapsed"
+            )
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            bln_list = ["JAN26", "FEB26", "MAR26", "APR26", "MEI26", "JUN26", "JUL26", "AGT26", "SEP26", "OKT26"]
+
+            if selected_tokos:
+                selected_rows = []
+                for selected_toko in selected_tokos:
+                    selected_code = selected_toko.split(" - ")[0].strip().upper()
+                    sub_df = df_depo[df_depo["search_code"].astype(str).str.strip().str.upper() == selected_code]
+                    
+                    row = aggregate_store_rows(sub_df)
+                    selected_rows.append(row)
+
+                    omset_okt26 = safe_float(row.get("OKT26_AB4", 0))
+                    rt225_ab4 = safe_float(row.get("RT225_AB4", 0))
+                    
+                    diff_omset = omset_okt26 - rt225_ab4
+                    pct_omset = (diff_omset / rt225_ab4 * 100) if rt225_ab4 > 0 else 0
+                    status_arrow, status_color = ("▲", "#10b981") if diff_omset >= 0 else ("▼", "#ef4444")
+
+                    jan_jun_cols = ["JAN26_AB4", "FEB26_AB4", "MAR26_AB4", "APR26_AB4", "MEI26_AB4", "JUN26_AB4"]
+                    sm1_26_total = sum(safe_float(row.get(m, 0)) for m in jan_jun_cols)
+                    sm1_26_avg = sm1_26_total / 6.0
+                    
+                    diff_sm1 = omset_okt26 - sm1_26_avg
+                    pct_sm1 = (diff_sm1 / sm1_26_avg * 100) if sm1_26_avg > 0 else 0
+                    status_arrow_sm1, status_color_sm1 = ("▲", "#10b981") if diff_sm1 >= 0 else ("▼", "#ef4444")
+
+                    max_val, max_month_code = -1.0, "OKT26"
+                    for b in bln_list:
+                        val = safe_float(row.get(f"{b}_AB4", 0))
+                        if val > max_val: max_val, max_month_code = val, b
+
+                    c1, c2 = st.columns([1, 1])
+                    with c1:
+                        st.markdown(f"""<div class="metric-card" style="border-left-color: #2563eb;"><div class="metric-title">REAL OMSET OKT 26 DIVISI AB4</div><div class="metric-value">Rp {omset_okt26:,.1f} Jt</div><div class="metric-subtitle" style="color: {status_color};">{status_arrow} {abs(pct_omset):,.1f}% vs RT2 25 ({diff_omset:+,.1f} Jt)</div><div class="metric-subtitle" style="color: {status_color_sm1}; margin-top: 5px;">{status_arrow_sm1} {abs(pct_sm1):,.1f}% vs SM1 26 ({diff_sm1:+,.1f} Jt)</div></div>""", unsafe_allow_html=True)
+                    with c2:
+                        st.markdown(f"""<div class="metric-card" style="border-left-color: #06b6d4;"><div class="metric-title">OMSET TERBESAR DIVISI AB4</div><div class="metric-value" style="font-size: 1.25rem;">Puncak Omset Pada Bulan <b>{format_month_label(max_month_code)}</b></div><div class="metric-subtitle" style="color: #06b6d4;">Dengan Jumlah Omset Rp {max_val:,.1f} Jt</div></div>""", unsafe_allow_html=True)
+
+                    def fmt_v(suf): return "".join([f"<td>{f_num(row.get(f'{b}_{suf}', 0))}</td>" for b in bln_list])
+                    def fmt_raw(suf): return "".join([f"<td>{f_dec(row.get(f'{b}_{suf}', 0))}</td>" for b in bln_list])
+
+                    table_html = f"""<div class="omset-table-container"><div style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">Depo : <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 4px;">{row.get('depo', '-')}</span><br>Kode Cust : <span style="background: #e5e7eb; padding: 3px 8px; border-radius: 4px;">{row['search_code']}</span><br>Nama Toko : <b>{row['cust']}</b></div><table class="report-table"><thead><tr><th class="blue-header" style="width: 55px;">RT2 25</th><th class="blue-header" style="width: 55px;">SM2 25</th><th style="width: 25px;">No</th><th style="text-align: left;">KP</th><th style="width: 45px;">Satuan</th><th>JAN 26</th><th>FEB 26</th><th>MAR 26</th><th>APR 26</th><th>MEI 26</th><th>JUN 26</th><th>JUL 26</th><th>AGT 26</th><th>SEP 26</th><th>OKT 26</th></tr></thead><tbody><tr><td class="center">{f_num(row.get('RT225_TOR',0))}</td><td class="center">{f_num(row.get('SM225_TOR',0))}</td><td class="center bold-col">1</td><td class="left bold-col">TOR</td><td class="center">Krt</td>{fmt_v('TOR')}</tr><tr><td class="center">{f_num(row.get('RT225_UCV',0))}</td><td class="center">{f_num(row.get('SM225_UCV',0))}</td><td class="center bold-col">2</td><td class="left bold-col">UCV</td><td class="center">Krt</td>{fmt_v('UCV')}</tr><tr><td class="center">{f_num(row.get('RT225_KTD',0))}</td><td class="center">{f_num(row.get('SM225_KTD',0))}</td><td class="center bold-col">3</td><td class="left bold-col">KTD</td><td class="center">Krt</td>{fmt_v('KTD')}</tr><tr><td class="center">{f_num(row.get('RT225_RBL',0))}</td><td class="center">{f_num(row.get('SM225_RBL',0))}</td><td class="center bold-col">4</td><td class="left bold-col">RBLGOLD</td><td class="center">Krt</td>{fmt_v('RBL')}</tr><tr><td class="center">{f_num(row.get('RT225_UCW',0))}</td><td class="center">{f_num(row.get('SM225_UCW',0))}</td><td class="center bold-col">5</td><td class="left bold-col">UCW</td><td class="center">Krt</td>{fmt_v('UCW')}</tr><tr><td class="center">{f_num(row.get('RT225_ISO',0))}</td><td class="center">{f_num(row.get('SM225_ISO',0))}</td><td class="center bold-col">6</td><td class="left bold-col">ISO</td><td class="center">Krt</td>{fmt_v('ISO')}</tr><tr class="row-category"><td class="center">{f_dec(row.get('RT225_EDV',0))}</td><td class="center">{f_dec(row.get('SM225_EDV',0))}</td><td colspan="2" class="left bold-col" style="padding-left:10px;">ENERGY DRINK VITAMIN</td><td class="center">Jt Rp</td>{fmt_raw('EDV')}</tr><tr><td class="center">{f_num(row.get('RT225_CZLSN',0))}</td><td class="center">{f_num(row.get('SM225_CZLSN',0))}</td><td class="center bold-col">7</td><td class="left bold-col">CZ</td><td class="center">Lsn</td>{fmt_v('CZLSN')}</tr><tr><td class="center">{f_num(row.get('RT225_CZKRT',0))}</td><td class="center">{f_num(row.get('SM225_CZKRT',0))}</td><td class="center bold-col"></td><td class="left bold-col">CZ</td><td class="center">Krt</td>{fmt_v('CZKRT')}</tr><tr><td class="center">{f_num(row.get('RT225_R3',0))}</td><td class="center">{f_num(row.get('SM225_R3',0))}</td><td class="center bold-col"></td><td class="left bold-col">R3</td><td class="center">Krt</td>{fmt_v('R3')}</tr><tr><td class="center">{f_num(row.get('RT225_R06EXC',0))}</td><td class="center">{f_num(row.get('SM225_R06EXC',0))}</td><td class="center bold-col"></td><td class="left bold-col">R06</td><td class="center">Krt</td>{fmt_v('R06EXC')}</tr><tr><td class="center">{f_num(row.get('RT225_ALK',0))}</td><td class="center">{f_num(row.get('SM225_ALK',0))}</td><td class="center bold-col">8</td><td class="left bold-col">ALK</td><td class="center">Krt</td>{fmt_v('ALK')}</tr><tr><td class="center">{f_num(row.get('RT225_ALKREG',0))}</td><td class="center">{f_num(row.get('SM225_ALKREG',0))}</td><td class="center bold-col"></td><td class="left bold-col">ALK REG</td><td class="center">Krt</td>{fmt_v('ALKREG')}</tr><tr><td class="center">{f_num(row.get('RT225_ALKNONREG',0))}</td><td class="center">{f_num(row.get('SM225_ALKNONREG',0))}</td><td class="center bold-col"></td><td class="left bold-col">ALK NON REG</td><td class="center">Krt</td>{fmt_v('ALKNONREG')}</tr><tr><td class="center">{f_num(row.get('RT225_MAA',0))}</td><td class="center">{f_num(row.get('SM225_MAA',0))}</td><td class="center bold-col">9</td><td class="left bold-col">MAA</td><td class="center">Krt</td>{fmt_v('MAA')}</tr><tr class="row-category"><td class="center">{f_dec(row.get('RT225_HC',0))}</td><td class="center">{f_dec(row.get('SM225_HC',0))}</td><td colspan="2" class="left bold-col" style="padding-left:10px;">HOME CARE</td><td class="center">Jt Rp</td>{fmt_raw('HC')}</tr><tr class="row-total"><td class="center">{f_dec(row.get('RT225_AB4',0))}</td><td class="center">{f_dec(row.get('SM225_AB4',0))}</td><td colspan="2" class="left bold-col" style="padding-left:10px;">DIVISI AB4</td><td class="center">Jt Rp</td>{fmt_raw('AB4')}</tr></tbody></table></div>"""
+                    try: st.html(table_html)
+                    except AttributeError: st.markdown(table_html, unsafe_allow_html=True)
+
+                pdf_bytes = generate_pdf_multi_toko(selected_rows, bln_list)
+                st.markdown("<br>", unsafe_allow_html=True)
+                col_pdf1, col_pdf2, col_pdf3 = st.columns([1, 2, 1])
+                with col_pdf2:
+                    st.download_button(label=f"📄 Export / Download PDF ({len(selected_tokos)} Toko)", data=pdf_bytes, file_name=f"Laporan_Omset_MultiToko_{len(selected_tokos)}_Toko.pdf", mime="application/pdf", use_container_width=True)
+
+except Exception as e:
+    st.error("🚨 TERJADI KESALAHAN PADA APLIKASI:")
+    st.code(traceback.format_exc(), language="bash")
